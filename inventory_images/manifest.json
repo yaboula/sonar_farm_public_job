@@ -126,6 +126,12 @@
       "bytes": 178013,
       "width": 512,
       "height": 512
+    },
+    "farm_tablet": {
+      "sha256": "2b18f9bea250fd376a537c7e2a822736ff9b1d2726d1eb62d856509e6f81b61c",
+      "bytes": 339018,
+      "width": 512,
+      "height": 512
     }
   }
 }

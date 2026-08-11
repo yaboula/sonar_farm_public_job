@@ -49,12 +49,18 @@ def normalize(source: Path) -> Image.Image:
     return canvas
 
 
-def build() -> None:
+def build(only: str | None = None) -> None:
     (OX_DIR / "previews" / "64").mkdir(parents=True, exist_ok=True)
     (OX_DIR / "previews" / "128").mkdir(parents=True, exist_ok=True)
     WEB_DIR.mkdir(parents=True, exist_ok=True)
+    manifest_path = OX_DIR / "manifest.json"
     manifest: dict[str, dict[str, object]] = {}
-    for item_id in item_ids():
+    if only and manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8")).get("items", {})
+    selected = [only] if only else item_ids()
+    if only and only not in item_ids():
+        raise ValueError(f"unknown catalog item: {only}")
+    for item_id in selected:
         source = SOURCE_DIR / f"{item_id}-alpha.png"
         if not source.exists():
             raise FileNotFoundError(source)
@@ -66,7 +72,7 @@ def build() -> None:
             preview = image.resize((size, size), Image.Resampling.LANCZOS)
             preview.save(OX_DIR / "previews" / str(size) / ox_path.name, format="PNG", optimize=True)
         manifest[item_id] = {"sha256": digest(ox_path), "bytes": ox_path.stat().st_size, "width": 512, "height": 512}
-    (OX_DIR / "manifest.json").write_text(json.dumps({"version": 1, "items": manifest}, indent=2) + "\n", encoding="utf-8")
+    manifest_path.write_text(json.dumps({"version": 1, "items": manifest}, indent=2) + "\n", encoding="utf-8")
 
 
 def check() -> None:
@@ -113,7 +119,8 @@ def check() -> None:
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--check", action="store_true")
+parser.add_argument("--item")
 args = parser.parse_args()
 if not args.check:
-    build()
+    build(args.item)
 check()
