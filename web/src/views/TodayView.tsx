@@ -1,174 +1,61 @@
-import {
-  CaretRight,
-  Clock,
-  Drop,
-  FileText,
-  Package,
-  Plant,
-} from "@phosphor-icons/react";
-import { useNavigate } from "react-router-dom";
-import { StatePanel } from "../components/StatePanel";
+import { useEffect, useState } from "react";
+import { ViewFrame } from "../components/ViewFrame";
+import { useHubView } from "../hooks/useHubView";
 import { useHub } from "../store/HubContext";
-import type { NavigationIntent } from "../types";
+import type { TodayData } from "../types";
 
-interface PriorityProps {
-  number: number;
-  icon: typeof Package;
-  title: string;
-  primary: string;
-  secondary: string;
-  tertiary?: string;
-  action?: string;
-  onAction?: () => void;
-}
-
-function PriorityItem({
-  number,
-  icon: Icon,
-  title,
-  primary,
-  secondary,
-  tertiary,
-  action,
-  onAction,
-}: PriorityProps) {
-  return (
-    <article className="priority-item">
-      <span className={number === 1 ? "priority-number is-first" : "priority-number"}>{number}</span>
-      <Icon className="priority-icon" size={45} weight="thin" />
-      <div className="priority-copy">
-        <h3>{title}</h3>
-        <strong>{primary}</strong>
-        <p>{secondary}</p>
-        {tertiary ? <p>{tertiary}</p> : null}
-        {action ? (
-          <button type="button" onClick={onAction}>
-            {action}
-            <CaretRight size={18} weight="bold" />
-          </button>
-        ) : null}
-      </div>
-    </article>
-  );
-}
+const money = (value: number) => `$${value.toLocaleString("en-US")}`;
+const remaining = (timestamp: number | undefined, now: number) => {
+  if (!timestamp) return "";
+  const seconds = Math.max(0, timestamp - now);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.ceil((seconds % 3600) / 60);
+  return hours > 0 ? `${hours}h ${minutes}m remaining` : `${minutes}m remaining`;
+};
 
 export function TodayView() {
-  const navigate = useNavigate();
-  const { viewState, dispatchIntent, setViewState } = useHub();
-
-  const go = (intent: NavigationIntent) => {
-    dispatchIntent(intent);
-    navigate(intent.path ?? "/" + intent.target);
+  const { adapter } = useHub();
+  const view = useHubView<TodayData>({ kind: "hub", route: "today" });
+  const [busy, setBusy] = useState(false);
+  const [clock, setClock] = useState(() => Math.floor(Date.now() / 1000));
+  const [candidates, setCandidates] = useState<Array<{ source: number; name: string }>>([]);
+  const data = view.data;
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(Math.floor(Date.now() / 1000)), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const act = async (intent: Record<string, unknown>) => {
+    setBusy(true);
+    await adapter.dispatch(intent);
+    setBusy(false);
+    await view.reload();
+  };
+  const findCandidates = async () => {
+    const response = await adapter.load<Array<{ source: number; name: string }>>({ kind: "inviteCandidates" });
+    setCandidates(response.data ?? []);
   };
 
-  if (viewState !== "ready") {
-    return (
-      <div className="today-view today-state-view">
-        <div className="today-image" aria-hidden="true" />
-        <div className="today-vignette" aria-hidden="true" />
-        <StatePanel state={viewState} onAction={() => setViewState("ready")} />
-      </div>
-    );
-  }
-
-  return (
-    <section className="today-view">
-      <div className="today-image" aria-hidden="true" />
-      <div className="today-vignette" aria-hidden="true" />
-      <header className="today-intro">
-        <h1>Today</h1>
-        <p>What needs my attention now?</p>
-      </header>
-
-      <article className="assignment-hero">
-        <span className="status-pill">
-          <Clock size={19} />
-          In progress
-        </span>
-        <div className="assignment-main">
-          <Drop className="assignment-icon" size={76} weight="thin" />
-          <div className="assignment-copy">
-            <h2>Water North Field</h2>
-            <p>Tomatoes <span>·</span> Rows 4–8</p>
-            <strong><em>3</em> of 8 rows verified</strong>
-            <div className="progress-track" aria-label="3 of 8 rows verified">
-              <i style={{ width: "37.5%" }} />
-            </div>
-            <div className="assignment-deadline">
-              <Clock size={22} />
-              Due today, 18:30
-            </div>
-          </div>
-        </div>
-        <div className="related-order">
-          <FileText size={24} />
-          <span>Buyer Order BO-204</span>
-          <i>·</i>
-          <span>Today, 21:00</span>
-        </div>
-        <button
-          className="primary-button"
-          type="button"
-          onClick={() =>
-            go({
-              type: "navigate",
-              id: "continue-assignment",
-              target: "work",
-              path: "/work/assignments/asg-1048",
-              selectionKind: "assignment",
-              selectionId: "asg-1048",
-            })
-          }
-        >
-          Resume Field Work
-          <CaretRight size={27} weight="bold" />
-        </button>
-      </article>
-
-      <aside className="priority-rail" aria-label="Attention queue">
-        <PriorityItem
-          number={1}
-          icon={Package}
-          title="Company Cargo"
-          primary="12 Tomato Crates"
-          secondary="Deliver to Farm Warehouse"
-          tertiary="Owned by Sonar Farm"
-          action="View Cargo"
-          onAction={() =>
-            go({
-              type: "navigate",
-              id: "view-cargo",
-              target: "company",
-              selectionKind: "cargo",
-              selectionId: "cargo",
-            })
-          }
-        />
-        <PriorityItem
-          number={2}
-          icon={Drop}
-          title="Field Attention"
-          primary="North Field"
-          secondary="Water level low"
-          action="View Field"
-          onAction={() =>
-            go({
-              type: "navigate",
-              id: "view-field",
-              target: "fields",
-              selectionKind: "field",
-              selectionId: "north-field",
-            })
-          }
-        />
-        <PriorityItem
-          number={3}
-          icon={Plant}
-          title="Next Work"
-          primary="Harvest Greenhouse 2"
-          secondary="Tomorrow, 09:00"
-        />
-      </aside>
-    </section>
-  );
+  return <ViewFrame title="Today" eyebrow="PERSONAL FARMING" state={view.state} error={view.error}>{data && <>
+    <div className="metric-grid">
+      <article className="hero-card"><span>FARMER LEVEL</span><strong>{data.progression.level}<small>/20</small></strong>
+        <div className="progress"><i style={{ width: `${Math.min(100, (data.progression.xp - data.progression.levelStartXp) / Math.max(1, data.progression.nextLevelXp - data.progression.levelStartXp) * 100)}%` }} /></div>
+        <p>{data.progression.xp.toLocaleString()} XP &middot; {data.nextUnlock ? `Next: ${data.nextUnlock.label} at L${data.nextUnlock.level}` : "All perks unlocked"}</p></article>
+      <article className="metric"><span>YOUR CROPS</span><strong>{data.ownCrops}</strong><p>Only you can harvest them</p></article>
+      <article className="metric"><span>SELL BONUS</span><strong>+{Math.round(data.progression.sellBonus * 100)}%</strong><p>Applied after quality pricing</p></article>
+      <article className="metric"><span>MARKET STOCK</span><strong>{data.marketStock.plus ?? 0}<small> PLUS</small></strong><p>{data.marketStock.pro ?? 0} Pro units available</p></article>
+    </div>
+    <div className="split-grid"><article className="panel"><h2>Current Field</h2>{data.reservation ? <>
+      <div className={`status-pill ${data.reservation.status}`}>{data.reservation.status}</div>
+      <h3>{data.reservation.fieldId.replaceAll("_", " ")}</h3>
+      <p>{remaining(data.reservation.status === "grace" ? data.reservation.graceUntil : data.reservation.expiresAt, clock)}</p>
+      <p>{data.reservation.liveCrops} live crops &middot; {data.reservation.ownCrops} yours</p>
+      <div className="member-list">{data.reservation.members.map(member => <div key={member.identifier}><span>{member.display_name}</span><small>{member.role} &middot; {member.status}</small>
+        {data.reservation?.isOwner && member.role === "guest" && member.status === "active" ? <button disabled={busy} onClick={() => void act({ type: "coop.revoke", identifier: member.identifier })}>Revoke</button> : null}</div>)}</div>
+      {data.reservation.isOwner ? <><button disabled={busy} onClick={() => void findCandidates()}>Invite nearby farmer</button>
+        {candidates.map(candidate => <button key={candidate.source} disabled={busy} onClick={() => void act({ type: "coop.invite", targetSource: candidate.source })}>{candidate.name}</button>)}
+        <button className="danger-button" disabled={busy} onClick={() => confirm("Release now? All live crops will be destroyed and there is no refund.") && void act({ type: "field.release", confirmed: true })}>Release Field</button></>
+        : <button disabled={busy} onClick={() => void act({ type: "coop.leave" })}>Leave co-op</button>}
+    </> : <div className="empty"><strong>No Field reserved</strong><p>Choose an available public Field to start farming.</p></div>}</article>
+    <article className="panel"><h2>Ready to sell</h2>{data.sellableGroups.length ? data.sellableGroups.map(group => <div className="row" key={group.key}><span>{group.cropType} &middot; {group.tier}</span><strong>{group.quantity} &times; {money(group.unitPrice)}</strong></div>) : <div className="empty">No eligible produce in inventory.</div>}</article></div>
+  </>}</ViewFrame>;
 }
