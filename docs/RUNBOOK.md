@@ -1,0 +1,461 @@
+# RUNBOOK — sonar_farm
+
+Operaciones, despliegue y troubleshooting. Documentacion en espanol; el codigo/UI va en ingles.
+
+---
+
+## 1. Requisitos
+
+- Servidor FiveM (artifacts recientes).
+- Recursos iniciados **antes** de `sonar_farm`: `oxmysql`, `qb-core`, `ox_lib`, `ox_inventory`, `ox_target`.
+- Base de datos MariaDB/MySQL accesible por `oxmysql`.
+
+Orden recomendado en `server.cfg`:
+
+```cfg
+ensure oxmysql
+ensure ox_lib
+ensure qb-core
+ensure ox_inventory
+ensure ox_target
+ensure sonar_farm
+```
+
+Las herramientas administrativas requieren las dos condiciones:
+`Config.Debug = true` y el ACE configurado. Activar debug por sí solo no da
+permisos.
+
+```cfg
+add_ace group.admin sonar_farm.admin allow
+```
+
+`oxmysql` necesita su connection string. No guardes credenciales reales en este
+repositorio; configúrala en el entorno privado del servidor.
+
+```cfg
+set mysql_connection_string "<configured outside this repository>"
+```
+
+---
+
+## 2. Base de datos y Company Fields
+
+El esquema base vive en [`database/install.sql`](../database/install.sql) y crea
+`farming_crops`. Los módulos Company, Supplies y Fields ejecutan además su DDL
+idempotente durante el arranque. En `0.4.0` se crean `sf_fields`, revisiones,
+Rows, Slots, propiedad, Crop Plans, Work, Cargo, lotes, Buyer Orders y outbox.
+Un fallo en cualquiera de esas tablas deja el runtime en `FAILED`; nunca arranca
+con un catálogo parcial.
+
+Hay dos formas de instalar el esquema (ambas soportadas):
+
+1. **Auto-creacion (por defecto):** con `Config.Database.AutoCreateSchema = true`, el recurso ejecuta el DDL al arrancar. Es idempotente (`CREATE TABLE IF NOT EXISTS`), asi que no daña datos existentes.
+2. **Import manual:** pon `Config.Database.AutoCreateSchema = false` e importa `database/install.sql` en tu base de datos antes de iniciar el recurso.
+
+`Config.Database.AutoCreateSchema` controla el esquema agrícola base. Los
+esquemas empresariales se validan/crean siempre porque sus tablas son una
+dependencia dura cuando `Fields` o `Supplies` están activos.
+
+El runtime recorre `BOOTING → READY`. Un fallo de Bridge, validación de config,
+migración o lectura inicial lo deja en `FAILED`; no acepta acciones ni
+suscripciones y nunca continúa con estado vacío como si la base de datos
+estuviera sana. Durante un stop pasa a `STOPPING`.
+
+Tuning relacionado en [`config/config.lua`](../config/config.lua):
+
+- `Config.SaveInterval` (segundos): frecuencia del guardado por lotes. Default 60.
+- `Config.Database.BatchChunkSize`: filas por transaccion en upsert/delete. Default 100.
+
+---
+
+## 3. Modelo de persistencia
+
+- **Fuente de verdad:** estado en RAM (`State.crops`). La DB es respaldo asincrono.
+- **Dirty-flags + batch:** los cambios se marcan y se vuelcan cada `SaveInterval` con un patron de **snapshot swap** (no se pierden escrituras durante la transaccion; si falla, los ids se re-encolan).
+- **Chunking:** upserts/deletes en lotes de `BatchChunkSize`, siempre con parametros `?`.
+- **Crecimiento sin ticks:** se calcula por diferencia de tiempo (`os.time() - planted_at`) solo al consultar (lazy). No hay bucles de crecimiento.
+
+### Ventana de perdida en crash (importante)
+
+El guardado periodico es la **red de seguridad principal**. En un reinicio ordenado (`stop`/`restart`/hot update de txAdmin) se dispara `State.FlushSync()` en `onResourceStop`. En un **crash duro** del servidor pueden perderse como maximo los cambios de la ultima ventana `SaveInterval` (por defecto <= 60s). Baja `SaveInterval` si necesitas menos ventana, a costa de mas escrituras a DB.
+
+---
+
+## 4. Pack de props de plantas (Etapa 4) — REQUISITO
+
+Los cultivos se dibujan con **props custom** (`bzzz_plants_<crop>_01/02/03`), que
+viven en su **propio recurso** de streaming. `sonar_farm` no los incluye.
+
+1. Asegurate de que el recurso del pack de plantas esta iniciado en `server.cfg`.
+   El orden no importa: los modelos se resuelven en runtime.
+2. Los nombres se configuran en [`config/crops.lua`](../config/crops.lua), en `stages[].model`.
+
+### Que pasa si un modelo no existe
+
+Al arrancar, el cliente valida cada modelo con `IsModelValid` y avisa **por nombre**:
+
+```
+[sonar_farm] [WARN] Missing crop models: bzzz_plants_lettuce_02 (lettuce). They will render as "prop_plant_01a".
+```
+
+Ese aviso existe porque, sin el, un nombre de prop equivocado es invisible:
+`CreateObject` falla en silencio y simplemente no aparece nada. El respaldo
+(`Config.Render.FallbackModel`) mantiene el cultivo visible e interactuable, asi que
+el juego sigue funcionando mientras se corrige el nombre en config.
+
+Si el pack usa otra convencion para algun cultivo, el aviso te dice exactamente que
+modelo cambiar. Solo se toca config, nunca codigo.
+
+---
+
+## 5. Slots de plantacion (surcos fijos)
+
+El plantado libre (cualquier coordenada dentro de un radio) fue reemplazado por
+**slots**: puntos exactos definidos en [`config/zones.lua`](../config/zones.lua).
+
+### Por que
+
+- Sin solapamiento de props.
+- Campos con hileras simetricas (estilo granja real).
+- Capacidad dura por zona: 40 slots = 40 cultivos, nunca 41. Economia predecible.
+
+### Como se configuran
+
+Preferible `grid` (genera la malla) y, si hace falta, `slots` explicitos para
+rincones raros:
+
+```lua
+grid = {
+    origin = vec3(2236.0, 5031.0, 44.2),
+    rows = 5,
+    cols = 8,                 -- 40 slots
+    spacing = { x = 2.2, y = 2.8 },
+    heading = 0.0,            -- rota el bloque entero con el surco del mapa
+},
+```
+
+Los indices son **1-based**. Reordenar o cambiar el tamano del grid **renumera**
+los slots y huerfana los cultivos ya plantados. Anade slots al final, o limpia
+la zona primero (`/farm_debug_clear`).
+
+### Como planta el jugador
+
+1. Mira un surco vacio con ox_target -> **Plant seeds** -> elige semilla.
+2. O usa la semilla desde el inventario: planta en el **slot vacio mas cercano**
+   (nunca en coordenadas libres). Si no hay surco cerca, avisa y no planta.
+
+`Config.Render.SlotProp` (opcional) dibuja un prop en cada surco vacio. Por
+defecto esta en `false`: 64 entidades extra son una eleccion del servidor.
+
+### Migracion de DB
+
+Al arrancar, el recurso aplica migraciones idempotentes: columna `slot` y clave
+unica `(zone, slot)`. Los cultivos plantados antes del sistema de slots quedan
+con `slot = NULL` (siguen creciendo y se pueden cosechar; no ocupan surco).
+
+---
+
+## 6. Items de ox_inventory (Etapa 3)
+
+`ox_inventory` **no permite registrar items en runtime**, asi que hay que copiarlos a mano una vez.
+
+1. Abre [`data/ox_inventory_items.lua`](../data/ox_inventory_items.lua).
+2. Copia las entradas de dentro de la tabla a `ox_inventory/data/items.lua`, dentro de la tabla que ese fichero retorna.
+3. `restart ox_inventory`.
+
+Items necesarios: `carrot_seed`, `potato_seed`, `lettuce_seed`,
+`tomato_seedling`, `carrot`, `potato`, `lettuce`, `tomato`, `watering_can`.
+Para Advanced Care añade `fertilizer_organic`, `fertilizer_chemical`,
+`hand_hoe`, `pest_spray_organic` y `pest_spray_chemical`.
+
+**Importante (Etapa 4):** las semillas llevan `client.export = 'sonar_farm.useSeed'`.
+Eso es lo que permite plantar **usando el item**, que es el gesto que el jugador
+intenta primero. Si omites esas lineas no se rompe nada, pero plantar solo sera
+posible desde el menu del campo.
+
+Sin imagenes en `ox_inventory/web/images/` los items salen con un placeholder: es suficiente para probar.
+
+Para darte material de prueba:
+
+```
+/giveitem <id> carrot_seed 10
+/giveitem <id> watering_can 1
+```
+
+---
+
+### Activar Advanced Crop Care
+
+1. Copia los cinco objetos adicionales de inventario.
+2. Mantén un backup de DB; no hay migración SQL porque el estado nuevo vive en
+   `farming_crops.data`.
+3. Cambia `Config.Features.AdvancedCare = true`.
+4. Revisa `Config.Farming.ConditionEffects`: el global solo puede desactivar.
+   Cada `conditionEffects` de cultivo puede estrechar ese conjunto.
+5. Reinicia `sonar_farm` y confirma que la validación de config termina sin
+   errores antes de abrir farming a jugadores.
+
+Tomato trae malas hierbas y plagas desactivadas como ejemplo de gating por
+cultivo; Carrot, Potato y Lettuce ejercitan el modelo completo.
+
+Para rollback, vuelve a `AdvancedCare = false` y reinicia. Los campos JSON ya
+persistidos quedan ignorados y los payloads/targets regresan al contrato
+anterior; no es necesario limpiar datos.
+
+### Crop Inspection Pulse Rail
+
+1. Construye `inspection-ui/` con `npm ci && npm run build` antes de arrancar el
+   recurso. El artefacto requerido es `inspection-ui/dist/index.html`.
+2. Mantén `Config.Features.InspectionHud = true`. Si necesitas un rollback
+   inmediato, ponlo en `false`: Inspect volverá al texto anterior.
+3. Ajusta `Config.Inspection.MinimapWidthRatio`, `MinimapGapPixels` y
+   `RightInsetPixels` si el servidor reemplaza el radar estándar. La barra debe
+   empezar después del minimapa y terminar dentro del safe-zone.
+4. `CloseDistance` debe ser igual o superior a la distancia de interacción. El
+   servidor valida la snapshot inicial y el cliente cierra al superar esa
+   distancia.
+5. Inspect no usa `SetNuiFocus`. Backspace, una segunda inspección, muerte,
+   eliminación del cultivo, reset de sync, Hub, minijuego o stop del recurso
+   cierran la barra.
+
+El HUD no genera tráfico periódico: recibe una snapshot autoritativa al abrir y
+después evalúa localmente con el mismo motor compartido. Los valores se publican
+cada segundo y las curvas se reconstruyen cada cinco segundos o tras un delta.
+
+---
+
+## 7. Herramientas administrativas y de debug
+
+Los comandos de diagnóstico se registran solo si `Config.Debug = true`; los
+constructores permanecen inertes mientras debug esté apagado. Para jugadores
+todos requieren además `is_player_ace_allowed <source> sonar_farm.admin`; la
+consola del servidor está autorizada. Esta doble puerta se aplica también a
+operaciones destructivas.
+
+### Constructores de zonas
+
+| Comando | Descripcion |
+| --- | --- |
+| `/farm_builder` | Diseña una zona grid y copia la configuración Lua. |
+| `/farm_slots` | Diseña una zona de slots explícitos y copia la configuración Lua. |
+
+### Estado y persistencia (servidor, Etapa 2)
+
+Verifican el motor de estado **sin pasar por validaciones** de gameplay.
+
+| Comando | Descripcion |
+| --- | --- |
+| `/farm_debug_plant [cropType] [growthTime]` | Crea un cultivo de prueba en tus coordenadas (o Grapeseed si es consola). |
+| `/farm_debug_dump` | Imprime totales: crops, dirty, deleted, cells, loaded. |
+| `/farm_debug_grow [id]` | Evalua el crecimiento por timestamp de un cultivo. |
+| `/farm_debug_save` | Fuerza un `State.Flush()` inmediato. |
+| `/farm_debug_clear` | Elimina todos los cultivos (los encola para borrado). |
+
+### Bucle de gameplay (cliente, Etapa 3)
+
+Pasan por **toda** la cadena autoritativa: rate limit, cooldown, anti-teleport, zona, inventario y permisos. Es lo que hay que usar para validar la Etapa 3.
+
+| Comando | Descripcion |
+| --- | --- |
+| `/farm_plant [cropType]` | Planta en el slot configurado vacio mas cercano (default `carrot`). |
+| `/farm_water [cropId]` | Riega. Sin id, coge el cultivo mas cercano. |
+| `/farm_harvest [cropId]` | Cosecha. Sin id, coge el cultivo mas cercano. |
+
+`/farm_water` y `/farm_harvest` resuelven el cultivo mas cercano si no pasas id, para no tener que copiar UUIDs a mano. Todos pasan por la misma capa `Actions` que usa ox_target: no hay logica especial de debug.
+
+### Motor visual (cliente, Etapa 4)
+
+| Comando | Descripcion |
+| --- | --- |
+| `/farm_render` | Estado del motor visual: cultivos en cache, props dibujados, desfase de reloj, interior si/no, y detalle por prop en F8. |
+| `/farm_resync` | Fuerza una resuscripcion inmediata. Util tras editar zonas o cultivos en caliente. |
+
+`/farm_render` es **el comando al que acudir cuando algo se ve raro**: separa los dos
+fallos que se confunden entre si. Si `cache=0`, el servidor nunca te hablo de ese
+cultivo (problema de suscripcion o de celda). Si `cache>0` pero `props=0`, lo sabes
+pero no lo dibujas (problema de modelo, radio, tope o interior).
+
+### Prueba de round-trip de persistencia
+
+1. `/farm_debug_plant carrot 60`
+2. `/farm_debug_dump` -> deberia mostrar `crops=1 dirty=1`.
+3. `/farm_debug_save` -> `Flush OK` (o espera al guardado periodico).
+4. `restart sonar_farm`
+5. En consola deberia verse `State engine ready (1 crops loaded)`.
+6. `/farm_debug_grow <id>` -> el progreso aumenta con el tiempo.
+
+### Prueba de simulación proporcional V2
+
+`/farm_debug_plant` crea registros V2 por defecto. Para comparar ciclos sin
+alterar ninguna otra lógica, planta el mismo cultivo con dos duraciones:
+
+1. `/farm_debug_plant tomato 2400`
+2. `/farm_debug_plant tomato 21600`
+3. Aplica cuidados en los mismos porcentajes de ambos ciclos.
+4. Compara `/farm_debug_grow <id>` e Inspect.
+5. Reinicia durante una protección y verifica su porcentaje restante.
+
+La biología debe coincidir; cooldowns, minijuego, Warehouse, delivery y restock
+deben mantener sus segundos reales. La guía completa está en
+`docs/CROP_SIMULATION_V2.md`.
+
+### Prueba del bucle completo (Etapa 3 / slots)
+
+Requiere estar junto a un surco vacio de `config/zones.lua` y tener los items.
+
+1. `/giveitem <id> carrot_seed 5` y `/giveitem <id> watering_can 1`.
+2. Mira el suelo del campo -> ox_target **Plant seeds** -> elige Carrot.
+   Alternativa: `/farm_plant carrot` (planta en el slot vacio mas cercano).
+3. El prop aparece en la posicion del slot, no a tus pies.
+4. Intenta plantar otra vez en el mismo surco -> `Something is already growing there.`
+5. `/farm_water` / `/farm_harvest` como antes.
+
+Usar la semilla desde el inventario planta en el slot vacio mas cercano; fuera de
+alcance de cualquier surco, avisa y no planta.
+
+### Prueba del motor visual (Etapa 4)
+
+1. Entra en una zona de cultivo. Debe aparecer el **blip** en el mapa.
+2. Apunta al suelo dentro de la zona -> opcion **Plant seeds** de ox_target. El menu muestra tus semillas y desactiva las que no tienes.
+3. Alternativa: **usa la semilla** desde el inventario. Debe plantar igual.
+4. Tras plantar, el prop debe aparecer **de inmediato** (no al cambiar de celda).
+5. `/farm_render` -> `cache` y `props` deben coincidir para los cultivos cercanos.
+6. Apunta al cultivo -> **Inspect** muestra crecimiento, agua y salud. **Water** solo aparece si tiene sed; **Harvest** solo si esta maduro o muerto.
+7. Alejate mas de 30m -> el prop se destruye. Vuelve -> se recrea.
+8. Espera a que cambie de fase (`ratio` en `config/crops.lua`) -> el modelo cambia.
+9. Entra en un interior -> los props desaparecen. Sal -> vuelven.
+10. Con dos jugadores: A planta y B (cerca) debe ver el prop aparecer sin recargar nada. A cosecha y el prop desaparece para B.
+11. `restart sonar_farm` -> **no** deben quedar props huerfanos en el campo.
+12. Mueve al jugador a un routing bucket distinto de `0`: el servidor debe
+    cancelar la suscripción, ordenar limpieza y rechazar farming con
+    `wrong_instance`. Al volver a `0`, debe resuscribirse.
+
+### Prueba de Advanced Crop Care
+
+1. Activa el feature y entrega fertilizantes, `hand_hoe` y sprays al jugador.
+2. Planta Carrot y usa **Inspect**: deben aparecer nutrientes, malas hierbas y
+   plagas. En Tomato, malas hierbas/plagas no deben aparecer.
+3. Deja avanzar el tiempo: malas hierbas aceleran pérdida de agua/nutrientes y
+   las plagas aparecen después del onset configurado.
+4. **Fertilize** aumenta nutrientes. Fertilizar por encima del óptimo debe elevar
+   `overfertilizeExcess`; al techo devuelve `nutrients_saturated`.
+5. **Remove weeds** requiere `hand_hoe`; **Treat pests** consume un spray.
+6. Compara dos cosechas: plagas deben bajar `productionScore`; estrés/quemadura
+   deben bajar calidad y aparecer como `defect` en metadata.
+7. Desactiva el feature y reinicia: desaparecen targets/campos y el farming
+   anterior funciona sin cambios.
+
+### Prueba de rendimiento
+
+Con `/farm_render` confirma que los props no pasan de `Config.Render.MaxProps`.
+En reposo fuera de zona el recurso debe marcar `0.00 ms` (un solo hilo con espera
+de `TickFar`). Con 40–50 cultivos visibles y apuntando a un cultivo V2, mide al
+menos 30 segundos: el valor estable esperado es `0.00–0.01 ms`. Un pico breve al
+cargar los props por primera vez es aceptable; un valor sostenido superior indica
+que una ruta de target volvió a llamar `Crops.Condition` directamente. Las acciones
+del servidor siempre recalculan el estado y no dependen de esta caché visual.
+
+### Pruebas de seguridad que deberian fallar
+
+| Prueba | Resultado esperado |
+| --- | --- |
+| `/farm_plant carrot` lejos de cualquier surco | `No empty planting plot nearby.` |
+| `/farm_plant tomato` en un surco de `grapeseed_south` | `That crop cannot be planted in this zone.` |
+| Plantar dos veces el mismo surco | `Something is already growing there.` |
+| `/farm_plant carrot` sin semillas | `You do not have the required seeds.` |
+| `/farm_water` sin regadera | `You need a watering can.` |
+| Repetir `/farm_plant` muy rapido | `Slow down.` (token bucket) |
+| Alejarse y `/farm_harvest <id>` | `You are too far away.` |
+| Cosechar cultivo ajeno con `OwnerOnlyHarvest = true` | `This crop belongs to someone else.` |
+| Plantar mas de `MaxCropsPerPlayer` | `You have reached your active crop limit.` |
+| Usar `/farm_builder`, `/farm_slots` o `/farm_debug_clear` sin ACE | Permiso denegado; no cambia estado. |
+| Ejecutar una accion antes de `READY` | `service_unavailable`; no cambia estado ni inventario. |
+| Ejecutar farming en routing bucket distinto de `0` | `wrong_instance`; caché y props se limpian. |
+
+---
+
+### Activar Supplies Runtime V2
+
+1. Mantén `Config.Features.Supplies = false` mientras instalas y valida primero
+   Advanced Crop Care 0.2.0.
+2. Copia las 21 definiciones generadas de `data/ox_inventory_items.lua` y las 21
+   imágenes de `inventory_images/` a la carpeta de imágenes de `ox_inventory`.
+3. Construye `inspection-ui/`, `minigames-ui/` y `web/`; `nui-shell/index.html`
+   es el único `ui_page` y necesita los tres artefactos.
+4. Concede `sonar_farm.company_admin` al grupo administrativo. En juego ejecuta
+   `/farmcompany bootstrap <nombre>` como futuro Owner; registra $25.000 de
+   crédito inicial en el ledger de forma idempotente.
+5. Añade miembros con `/farmcompany member <identifier> <role>`. Desde consola
+   usa `/farmcompany member <companyId> <identifier> <role>`; `owner` está
+   reservado al bootstrap.
+6. Activa `Config.Features.Supplies = true` solo en pruebas. Reduce los lead
+   times en configuración para E2E, nunca en la lógica.
+7. Verifica Tablet → draft, Office → aprobación/confirmación, una única entrega,
+   retirada en Warehouse, uso de cada tier y devolución con durabilidad.
+8. Reinicia durante una entrega y durante una retirada; la evaluación lazy y el
+   outbox deben reconciliar sin duplicar objetos ni movimientos del ledger.
+
+Antes del rollout ejecuta `lua scripts/generate_items.lua --check`,
+`python scripts/process_item_assets.py --check`, las pruebas Lua, y todas las
+puertas de `web/`, `minigames-ui/` e `inspection-ui/`. Mantén el flag apagado
+si falla cualquiera.
+
+---
+
+## 8. Troubleshooting
+
+| Sintoma | Causa probable | Solucion |
+| --- | --- | --- |
+| `attempt to index a nil value (field 'Crops')` | Los ficheros de `config/` no estan declarados en `fxmanifest.lua` | Asegurate de que `config/config.lua`, `config/crops.lua`, `config/zones.lua` y `config/minigames.lua` estan en `shared_scripts`, y **antes** del resto. |
+| `oxmysql is not started. Persistence is unavailable.` | oxmysql no arranco antes | Revisa orden en `server.cfg` y connection string. El runtime queda `FAILED`. |
+| `Schema creation failed: ...` | Permisos DB o connection string | Verifica credenciales/permisos `CREATE`. |
+| `Corrupt data JSON for crop <id>` | Edicion manual del campo `data` | El registro se carga con `data={}`; corrige el JSON en DB si procede. |
+| No aparecen los comandos `/farm_debug_*` o `/farm_*` | `Config.Debug = false` | Activa debug temporalmente en `config/config.lua`. |
+| El comando existe pero responde permiso denegado | Falta el ACE administrativo | Concede `sonar_farm.admin` al principal correcto; debug no basta. |
+| Cambios no persisten tras crash | Ventana `SaveInterval` | Es esperado en crash duro; baja `SaveInterval`. |
+| `You do not have the required seeds` teniendolas | Items no instalados en ox_inventory | Copia `data/ox_inventory_items.lua` (seccion 4) y reinicia ox_inventory. |
+| `You are not inside a farming zone` en pleno campo | (obsoleto: el plantado ya no usa radio) | Usa surcos: mira el suelo con ox_target o `/farm_plant` junto a un slot. |
+| `Movement validation failed` justo al conectar | Falso positivo del anti-teleport | No deberia ocurrir: hay grace period al conectar, TTL de muestra y descarte de coords invalidas. Si pasa, sube `ConnectGracePeriod` y reporta el caso. |
+| Cultivos que mueren demasiado rapido | `water.decayPerHour` alto para el ritmo del servidor | Ajusta por cultivo en `config/crops.lua`; `droughtTolerance` amortigua la perdida de salud. |
+| Calidad siempre 75 | Es lo esperado en Etapa 3 | El proveedor stub devuelve `Config.Quality.DefaultScore`; los minijuegos llegan en la Etapa 5. |
+| `Someone is already working on this crop` sin nadie mas | Doble peticion del mismo cliente | Es el lock anti-duplicacion haciendo su trabajo; reintenta. |
+| No aparece ningun prop, pero `/farm_render` dice `cache>0` | Modelos no validos o pack de plantas sin iniciar | Mira el aviso `Missing crop models` al arrancar y la seccion 4. |
+| No aparece ningun prop y `cache=0` | El servidor no te ha suscrito | `/farm_resync`. Si sigue en 0, revisa que el cultivo este en tu celda o adyacente (`Config.Sync.CellRadius`). |
+| Props flotando o medio enterrados | Terreno en pendiente | `Config.Render.GroundSnap = true` (por defecto). Si persiste, el raycast no encontro suelo y se usa la z guardada. |
+| Faltan props en un campo muy poblado | Tope `Config.Render.MaxProps` alcanzado | Es intencionado: se priorizan los mas cercanos. Sube el tope solo si mides el coste. |
+| Props visibles dentro de un interior | `Config.Render.SkipInInteriors = false` | Actívalo. El interior se filtra en cliente; los routing buckets se validan en servidor. |
+| Las plantas se ven en fase equivocada | Reloj del sistema del jugador desfasado | Se corrige solo: el servidor manda `serverTime` y el cliente ajusta el offset. Comprueba `clockOffset` en `/farm_render`. |
+| Props huerfanos tras varios `restart` | Version antigua sin limpieza | Ya se destruyen en `onResourceStop`. Los huerfanos previos desaparecen al reconectar. |
+| `Plant seeds` no aparece en el campo | Fuera de un slot, servicio no disponible o bucket no permitido | Acércate a una esfera de slot y confirma que el runtime está `READY`. |
+| `Usar la semilla no hace nada` | Falta `client.export` en ox_inventory | Ver seccion 6. |
+| `Stand next to an empty planting plot` usando semilla | No hay surco vacio cerca | Acercate a un slot; comprueba `grid` en `config/zones.lua`. |
+| `Something is already growing there` en surco vacio | Cache desfasada | Se auto-resynca; si persiste, `/farm_resync`. |
+| Cultivos huerfanos tras cambiar el grid | Indices renumerados | No reordenar grids en caliente; limpia la zona o anade slots al final. |
+
+---
+
+## 9. Lecciones aprendidas
+
+- `luac -p` es un smoke test rapido de sintaxis Lua antes de commitear: valida sintaxis, pero **no** detecta ficheros que faltan en `fxmanifest.lua`. Tras anadir un fichero nuevo, verifica siempre que esta declarado en el manifiesto.
+- El snapshot swap en `Flush` es imprescindible para no perder escrituras concurrentes durante el `await` de la DB.
+- En oxmysql, un array de parametros con un `nil` en medio rompe el binding (Lua no distingue hueco de fin de array). Las cadenas nullable usan `''` + `NULLIF(?, '')`; el slot numérico usa el sentinel `0` + `NULLIF(?, 0)`.
+- Validar la posicion con `GetEntityCoords(GetPlayerPed(source))` en el servidor, no con el `vector3` que envia el cliente. Es la diferencia entre un anti-cheat real y uno decorativo.
+- El anti-teleport necesita tolerancia o castiga a jugadores legitimos: al conectar y al cambiar de routing bucket o interior, las coordenadas del servidor son poco fiables (a veces el origen del mapa). Tres guardas lo cubren: la primera muestra solo inicializa la cache, las muestras viejas se descartan y hay grace period al conectar.
+- Cada modulo libera en `playerDropped` lo que el mismo reserva (buckets en `ratelimit`, cache de posicion y cooldowns en `validation`). Centralizar la limpieza en un modulo ajeno acopla y se olvida una tabla; los cooldowns eran justo esa tercera tabla facil de olvidar.
+- En cosecha, el orden importa: comprobar `CanCarry`, entregar el item y **solo entonces** borrar el cultivo. Al reves, un inventario lleno destruye la cosecha.
+- Un lock por `cropId` durante la accion evita que dos cosechas simultaneas entreguen producto dos veces. Es barato y cubre el caso que no aparece en pruebas manuales pero si el dia que dos jugadores pulsan a la vez.
+- El servidor devuelve codigos (`too_far`), no frases. El cliente traduce. Asi el servidor queda agnostico al idioma y no hay textos duplicados.
+- `data/ox_inventory_items.lua` se envuelve en `return { ... }` para que sea Lua valido y pase `luac -p`, aunque su uso real sea copiar y pegar en ox_inventory.
+- Si el cliente va a predecir crecimiento, la formula tiene que estar en **un solo fichero** compartido, no duplicada. Con dos copias la divergencia es cuestion de tiempo, y se manifiesta como "la planta se ve madura pero el servidor no me deja cosechar".
+- Predecir desde timestamps solo es seguro si ambos lados comparten el mismo "ahora". Un jugador con la hora del sistema mal veria fases equivocadas, asi que el servidor manda `serverTime` en cada sincronizacion y el cliente guarda el offset.
+- Un snapshot que reemplaza la cache puede tragarse los deltas que llegan durante el viaje de ida y vuelta. Hay que **bufferearlos** mientras la suscripcion esta en vuelo y reaplicarlos despues, o un cultivo plantado en esa ventana queda invisible hasta el siguiente cambio de celda.
+- Las celdas suscritas se derivan de la posicion real en el servidor y el callback **no acepta argumentos**. Si el cliente pudiera nombrar sus celdas, podria volcar todos los cultivos del mapa y sus propietarios.
+- Al cliente se le manda `isMine`, nunca el `citizenid` ajeno. No hay ninguna funcionalidad que lo necesite y filtrarlo alimenta metagaming.
+- `canInteract` de ox_target se ejecuta mientras el jugador apunta. Las opciones viven en la esfera permanente del slot y consultan directamente su ocupante: vacío muestra plantar; ocupado muestra inspeccionar/regar/cosechar sin superposición.
+- La distancia de ox_target debe quedar **por debajo** de `MaxInteractDistance`. Igualarlas hace que el jugador vea rechazos `too_far` apuntando a algo que el target le dejaba pulsar.
+- Sin `onResourceStop` que destruya los props, cada `restart` en desarrollo deja objetos huerfanos que nadie puede borrar. Se sufre veinte veces al dia.
+- No existe un native fiable para escalar props, asi que la variacion visual es solo rotacion. Derivarla del `cropId` (y no de `math.random`) es lo que garantiza que dos jugadores vean la misma planta igual.
+- La validacion de modelos al arrancar no es un lujo: sin ella, un nombre de prop equivocado no da ningun error, simplemente no aparece nada, y se pierde una tarde depurando el streaming.
+- El plantado libre (radio) se veia flexible y resulto ser el enemigo de la estetica y de la economia: sin slots, no hay tope real por zona y las plantas se solapan. Con slots, la capacidad es una decision de diseno (`rows * cols`).
+- Los indices de slot son 1-based a proposito: `0` queda reservado como sentinel denso y `NULLIF(?, 0)` lo convierte en SQL `NULL`.
+- Plantar dos jugadores el mismo surco a la vez requiere lock por `zone:slot`, no solo por `cropId`: el occupancy check no es atomico sin el.

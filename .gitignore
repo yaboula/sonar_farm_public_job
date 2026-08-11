@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+web/node_modules/
+minigames-ui/node_modules/
+
+# Build output (NUI SPA)
+web/build/
+web/dist/
+minigames-ui/dist/
+
+# Logs
+*.log
+logs/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Temp
+temp/
+tmp/
+output/
+.playwright-cli/
+frontend_web.zip
+asset-manifest.json
+asset-qa.md
+*.tmp
+*.bak

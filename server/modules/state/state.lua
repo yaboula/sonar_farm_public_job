@@ -1,0 +1,581 @@
+--[[
+    sonar_farm - State manager (server)
+    Authoritative in-memory hot state for crops. RAM is the source of truth
+    during gameplay; the DB is an async backup. Writes are tracked with dirty /
+    deleted sets and flushed in batches (snapshot swap, see State.Flush).
+
+    Record shape (mirrors farming_crops columns; data is a Lua table):
+      id, crop_type, owner, zone, slot, cell,
+      pos_x, pos_y, pos_z, heading,
+      planted_at, growth_time, state, data
+]]
+
+State = State or {}
+
+State.crops = State.crops or {}     -- [id] = record
+State.cells = State.cells or {}     -- [cellKey] = { [id] = true }  (spatial index)
+State.owners = State.owners or {}   -- [identifier] = { [id] = true }  (owner index)
+State.slots = State.slots or {}     -- ["zone:slot"] = id  (occupancy index)
+State.stableSlots = State.stableSlots or {} -- [stable slotId] = id
+State.dirty = State.dirty or {}     -- [id] = true  (pending upsert)
+State.deleted = State.deleted or {} -- [id] = true  (pending delete)
+State.loaded = false
+
+local CELL_SIZE = Sonar.Constants.SPATIAL_CELL_SIZE
+local Uuid = Sonar.Utils.Uuid
+local DeepMerge = Sonar.Utils.DeepMerge
+
+local function finite(value)
+    return type(value) == 'number'
+        and value == value
+        and value > -math.huge
+        and value < math.huge
+end
+
+local function nextUuid()
+    for _ = 1, 16 do
+        local candidate = Uuid()
+        if not State.crops[candidate] then
+            return candidate
+        end
+    end
+    error('Unable to generate a unique crop UUID after 16 attempts.')
+end
+
+-- ---------------------------------------------------------------------------
+-- Spatial index helpers
+-- ---------------------------------------------------------------------------
+
+--- Grid coordinates of the cell containing a world position.
+---@param x number
+---@param y number
+---@return number gx
+---@return number gy
+function State.CellCoords(x, y)
+    return math.floor(x / CELL_SIZE), math.floor(y / CELL_SIZE)
+end
+
+--- Cell key from grid coordinates.
+---@param gx number
+---@param gy number
+---@return string cellKey "gx:gy"
+function State.CellKeyAt(gx, gy)
+    return ('%d:%d'):format(gx, gy)
+end
+
+--- Compute the spatial-hash cell key for a world position.
+---@param x number
+---@param y number
+---@return string cellKey "gx:gy"
+function State.CellKey(x, y)
+    return State.CellKeyAt(State.CellCoords(x, y))
+end
+
+local function indexAdd(record)
+    local bucket = State.cells[record.cell]
+    if not bucket then
+        bucket = {}
+        State.cells[record.cell] = bucket
+    end
+    bucket[record.id] = true
+end
+
+local function indexRemove(record)
+    local bucket = State.cells[record.cell]
+    if bucket then
+        bucket[record.id] = nil
+        if next(bucket) == nil then
+            State.cells[record.cell] = nil
+        end
+    end
+end
+
+-- ---------------------------------------------------------------------------
+-- Owner index
+-- Keeps the per-player crop count an O(1) lookup instead of a full scan of hot
+-- state on every plant (see Validation.CropLimit).
+-- ---------------------------------------------------------------------------
+
+local function ownerAdd(record)
+    if not record.owner then return end
+
+    local bucket = State.owners[record.owner]
+    if not bucket then
+        bucket = {}
+        State.owners[record.owner] = bucket
+    end
+    bucket[record.id] = true
+end
+
+local function ownerRemove(record)
+    if not record.owner then return end
+
+    local bucket = State.owners[record.owner]
+    if bucket then
+        bucket[record.id] = nil
+        if next(bucket) == nil then
+            State.owners[record.owner] = nil
+        end
+    end
+end
+
+-- ---------------------------------------------------------------------------
+-- Slot occupancy index
+-- The authoritative answer to "is this plot free?", as an O(1) lookup. Kept in
+-- lockstep with the records so planting never has to scan a zone.
+-- ---------------------------------------------------------------------------
+
+--- Occupancy key for a zone slot.
+---@param zone string
+---@param slot number
+---@return string|nil key
+function State.SlotKey(zone, slot)
+    if not zone or not slot then return nil end
+    return ('%s:%d'):format(zone, slot)
+end
+
+local function slotAdd(record)
+    local key = State.SlotKey(record.zone, record.slot)
+    if not key then return end
+
+    local occupant = State.slots[key]
+    if occupant and occupant ~= record.id then
+        -- The unique DB key should make this unreachable; if it ever fires, the
+        -- in-memory index diverged and we want to know which crops collided.
+        Logger.Warn(('Slot %s claimed by %s while held by %s.'):format(key, record.id, occupant), 'state')
+    end
+
+    State.slots[key] = record.id
+    local stableId = record.data and record.data.slotId
+    if stableId then
+        local stableOccupant = State.stableSlots[stableId]
+        if stableOccupant and stableOccupant ~= record.id then
+            error(('Stable slot %s is held by crops %s and %s'):format(stableId, stableOccupant, record.id))
+        end
+        State.stableSlots[stableId] = record.id
+    end
+end
+
+local function slotRemove(record)
+    local key = State.SlotKey(record.zone, record.slot)
+    if key and State.slots[key] == record.id then
+        State.slots[key] = nil
+    end
+    local stableId = record.data and record.data.slotId
+    if stableId and State.stableSlots[stableId] == record.id then State.stableSlots[stableId] = nil end
+end
+
+--- Id of the crop occupying a slot, if any.
+---@param zone string
+---@param slot number
+---@return string|nil cropId
+function State.SlotOccupant(zone, slot)
+    local key = State.SlotKey(zone, slot)
+    return key and State.slots[key] or nil
+end
+
+function State.StableSlotOccupant(slotId)
+    return slotId and State.stableSlots[slotId] or nil
+end
+
+--- Occupied and total slot counts for a zone (total comes from config, so it is
+--- the zone's hard capacity).
+---@param zone string
+---@return number used
+---@return number total
+function State.SlotUsage(zone)
+    local total = Sonar.Zones.Count(zone)
+    local used = 0
+    for index = 1, total do
+        if State.SlotOccupant(zone, index) then
+            used = used + 1
+        end
+    end
+    return used, total
+end
+
+local function markDirty(id)
+    State.dirty[id] = true
+    State.deleted[id] = nil
+end
+
+-- ---------------------------------------------------------------------------
+-- CRUD (in-memory; persistence is deferred to Flush)
+-- ---------------------------------------------------------------------------
+
+--- Add a crop to hot state. Generates id/cell/timestamps when missing.
+---@param partial table
+---@return string id
+---@return table record
+function State.Add(partial)
+    local id = partial.id or nextUuid()
+    if State.crops[id] then
+        error(('Crop id collision: %s'):format(tostring(id)))
+    end
+    local def = Config.Crops and Config.Crops[partial.crop_type]
+
+    local record = {
+        id = id,
+        crop_type = partial.crop_type,
+        owner = partial.owner,
+        zone = partial.zone,
+        slot = tonumber(partial.slot),
+        pos_x = partial.pos_x,
+        pos_y = partial.pos_y,
+        pos_z = partial.pos_z,
+        heading = partial.heading or 0.0,
+        planted_at = partial.planted_at or os.time(),
+        growth_time = partial.growth_time or (def and def.growthTime) or 0,
+        state = partial.state or Sonar.Constants.CROP_STATE.PLANTED,
+        data = partial.data or {},
+    }
+    record.cell = partial.cell or State.CellKey(record.pos_x, record.pos_y)
+
+    State.crops[id] = record
+    indexAdd(record)
+    ownerAdd(record)
+    slotAdd(record)
+    markDirty(id)
+
+    return id, record
+end
+
+--- Get a crop record by id.
+---@param id string
+---@return table|nil
+function State.Get(id)
+    return State.crops[id]
+end
+
+--- Patch a crop record. `data` merges deeply; position changes reindex the cell.
+---@param id string
+---@param patch table
+---@return boolean ok
+function State.Update(id, patch)
+    local record = State.crops[id]
+    if not record then return false end
+
+    local posChanged = false
+    local ownerChanged = false
+    local slotChanged = false
+
+    for k, v in pairs(patch) do
+        if k == 'data' and type(v) == 'table' then
+            record.data = DeepMerge(record.data or {}, v)
+        else
+            if k == 'pos_x' or k == 'pos_y' then posChanged = true end
+            -- Ownership transfer (companies, plot sales) must reindex too.
+            if k == 'owner' and v ~= record.owner then
+                ownerRemove(record)
+                ownerChanged = true
+            end
+            if (k == 'zone' or k == 'slot') and v ~= record[k] then
+                if not slotChanged then slotRemove(record) end
+                slotChanged = true
+            end
+            record[k] = v
+        end
+    end
+
+    if posChanged then
+        indexRemove(record)
+        record.cell = State.CellKey(record.pos_x, record.pos_y)
+        indexAdd(record)
+    end
+
+    if ownerChanged then
+        ownerAdd(record)
+    end
+
+    if slotChanged then
+        slotAdd(record)
+    end
+
+    markDirty(id)
+    return true
+end
+
+--- Remove a crop from hot state and queue it for deletion.
+---@param id string
+---@return boolean ok
+function State.Remove(id)
+    local record = State.crops[id]
+    if not record then return false end
+
+    indexRemove(record)
+    ownerRemove(record)
+    slotRemove(record)
+    State.crops[id] = nil
+    State.dirty[id] = nil
+    State.deleted[id] = true
+    return true
+end
+
+-- ---------------------------------------------------------------------------
+-- Queries
+-- ---------------------------------------------------------------------------
+
+--- All crop records in a spatial cell.
+---@param cellKey string
+---@return table[]
+function State.GetByCell(cellKey)
+    local out = {}
+    local bucket = State.cells[cellKey]
+    if bucket then
+        for id in pairs(bucket) do
+            out[#out + 1] = State.crops[id]
+        end
+    end
+    return out
+end
+
+--- All crop records across several spatial cells (used by the sync layer to
+--- build a subscription snapshot).
+---@param cellKeys string[]
+---@return table[]
+function State.GetByCells(cellKeys)
+    local out = {}
+    for _, cellKey in ipairs(cellKeys) do
+        local bucket = State.cells[cellKey]
+        if bucket then
+            for id in pairs(bucket) do
+                out[#out + 1] = State.crops[id]
+            end
+        end
+    end
+    return out
+end
+
+--- Number of active crops owned by an identifier. Scans only that owner's
+--- bucket (bounded by MaxCropsPerPlayer), never the whole hot state.
+---@param identifier string
+---@return number
+function State.CountByOwner(identifier)
+    local bucket = identifier and State.owners[identifier]
+    if not bucket then return 0 end
+
+    local n = 0
+    for _ in pairs(bucket) do n = n + 1 end
+    return n
+end
+
+--- All crop records in a named zone.
+---@param zone string
+---@return table[]
+function State.GetByZone(zone)
+    local out = {}
+    for _, record in pairs(State.crops) do
+        if record.zone == zone then
+            out[#out + 1] = record
+        end
+    end
+    return out
+end
+
+--- The full hot-state table (do not mutate directly).
+---@return table<string, table>
+function State.All()
+    return State.crops
+end
+
+--- Number of crops in hot state.
+---@return number
+function State.Count()
+    local n = 0
+    for _ in pairs(State.crops) do n = n + 1 end
+    return n
+end
+
+-- ---------------------------------------------------------------------------
+-- Load
+-- ---------------------------------------------------------------------------
+
+--- Load all crops from the DB into hot state. Safe JSON decode: a corrupt
+--- `data` blob falls back to {} and is logged, without aborting the load.
+---@return boolean ok
+---@return number|string loadedOrError
+function State.LoadAll()
+    local rows, dbError = Database.LoadAllCrops()
+    if not rows then
+        State.loaded = false
+        return false, dbError or 'database read failed'
+    end
+
+    State.crops = {}
+    State.cells = {}
+    State.owners = {}
+    State.slots = {}
+    State.stableSlots = {}
+    State.dirty = {}
+    State.deleted = {}
+    State.loaded = false
+
+    local corrupt = 0
+    local orphans = 0
+    local legacy = 0
+    local unknown = 0
+    local repairedCells = 0
+    for _, row in ipairs(rows) do
+        local posX = tonumber(row.pos_x)
+        local posY = tonumber(row.pos_y)
+        local posZ = tonumber(row.pos_z)
+        local plantedAt = tonumber(row.planted_at)
+        local growthTime = tonumber(row.growth_time)
+        local heading = tonumber(row.heading) or 0.0
+        local slot = row.slot ~= nil and tonumber(row.slot) or nil
+        if type(row.id) ~= 'string' or row.id == ''
+            or type(row.crop_type) ~= 'string' or row.crop_type == ''
+            or not finite(posX) or not finite(posY) or not finite(posZ)
+            or not finite(plantedAt) or not finite(growthTime) or growthTime <= 0
+            or not finite(heading)
+            or (row.slot ~= nil and (not finite(slot) or slot < 1 or slot % 1 ~= 0)) then
+            return false, ('invalid required fields in crop row %s'):format(tostring(row.id))
+        end
+
+        local data = {}
+        if row.data and row.data ~= '' then
+            local ok, decoded = pcall(json.decode, row.data)
+            if ok and type(decoded) == 'table' then
+                data = decoded
+            else
+                corrupt = corrupt + 1
+                Logger.Warn(('Corrupt data JSON for crop %s, using empty table.'):format(tostring(row.id)), 'state')
+            end
+        end
+
+        local record = {
+            id = row.id,
+            crop_type = row.crop_type,
+            owner = row.owner,
+            zone = row.zone,
+            slot = slot,
+            cell = row.cell,
+            pos_x = posX,
+            pos_y = posY,
+            pos_z = posZ,
+            heading = heading,
+            planted_at = plantedAt,
+            growth_time = growthTime,
+            state = row.state or Sonar.Constants.CROP_STATE.PLANTED,
+            data = data,
+        }
+
+        local expectedCell = State.CellKey(record.pos_x, record.pos_y)
+        if record.cell ~= expectedCell then
+            record.cell = expectedCell
+            repairedCells = repairedCells + 1
+            State.dirty[record.id] = true
+        end
+
+        local slotKey = State.SlotKey(record.zone, record.slot)
+        if slotKey and State.slots[slotKey] then
+            return false, ('duplicate slot %s held by crops %s and %s')
+                :format(slotKey, State.slots[slotKey], record.id)
+        end
+
+        State.crops[record.id] = record
+        indexAdd(record)
+        ownerAdd(record)
+        slotAdd(record)
+
+        if not record.slot then
+            -- Planted before the slot migration, or by a debug command. It still
+            -- grows and can be harvested; it just holds no slot.
+            legacy = legacy + 1
+        elseif not Sonar.Zones.Slot(record.zone, record.slot) then
+            -- The slot it was planted in is gone from config (zone resized,
+            -- renumbered or removed). The crop is unreachable in-world.
+            orphans = orphans + 1
+        end
+        if not Config.Crops[record.crop_type] then
+            unknown = unknown + 1
+        end
+    end
+
+    State.loaded = true
+    if corrupt > 0 then
+        Logger.Warn(('Loaded with %d corrupt data blob(s).'):format(corrupt), 'state')
+    end
+    if legacy > 0 then
+        Logger.Info(('%d crop(s) hold no slot (planted before the slot system).'):format(legacy), 'state')
+    end
+    if orphans > 0 then
+        Logger.Warn(('%d crop(s) point at slots missing from config. Their zone was resized or renumbered; see docs/RUNBOOK.md.'):format(orphans), 'state')
+    end
+    if unknown > 0 then
+        Logger.Warn(('%d crop(s) reference crop types missing from config. They remain loaded for administrative recovery.'):format(unknown), 'state')
+    end
+    if repairedCells > 0 then
+        Logger.Warn(('Repaired stale spatial cells for %d crop(s); changes queued for persistence.'):format(repairedCells), 'state')
+    end
+    return true, State.Count()
+end
+
+-- ---------------------------------------------------------------------------
+-- Flush (persistence). Must run within a thread (uses oxmysql .await).
+-- ---------------------------------------------------------------------------
+
+--- Snapshot-swap flush. Detaches the dirty/deleted sets before awaiting the DB
+--- so writes during the transaction are not lost; on failure the affected ids
+--- are re-queued (merge) instead of dropped.
+---@return boolean ok
+local function doFlush()
+    if next(State.dirty) == nil and next(State.deleted) == nil then
+        return true
+    end
+
+    -- Snapshot swap: new sets capture any writes that happen during the await.
+    local dirtySnapshot = State.dirty
+    local deletedSnapshot = State.deleted
+    State.dirty = {}
+    State.deleted = {}
+
+    -- Build upsert rows from live records only (skip ids removed meanwhile).
+    local rows = {}
+    for id in pairs(dirtySnapshot) do
+        local record = State.crops[id]
+        if record then
+            rows[#rows + 1] = record
+        end
+    end
+
+    local deleteIds = {}
+    for id in pairs(deletedSnapshot) do
+        deleteIds[#deleteIds + 1] = id
+    end
+
+    local okUpsert = Database.UpsertCrops(rows)
+    local okDelete = Database.DeleteCrops(deleteIds)
+
+    -- Re-queue whatever failed to persist, without clobbering fresher marks.
+    if not okUpsert then
+        for id in pairs(dirtySnapshot) do
+            if State.crops[id] and not State.deleted[id] then
+                State.dirty[id] = true
+            end
+        end
+    end
+    if not okDelete then
+        for id in pairs(deletedSnapshot) do
+            if not State.crops[id] then
+                State.deleted[id] = true
+            end
+        end
+    end
+
+    return okUpsert and okDelete
+end
+
+--- Async batch flush of pending changes.
+---@return boolean ok
+function State.Flush()
+    return doFlush()
+end
+
+--- Emergency flush for onResourceStop / shutdown. Same logic as Flush; relies
+--- on oxmysql's awaitable API completing during graceful stops. The periodic
+--- save is the primary safety net (see docs/RUNBOOK.md).
+---@return boolean ok
+function State.FlushSync()
+    return doFlush()
+end
