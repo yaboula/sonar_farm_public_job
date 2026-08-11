@@ -325,4 +325,3 @@ function TomatoPlantScoring.Finalize(steps, config, interruptionPenalty)
         outcomes = outcomes,
     }
 end
-

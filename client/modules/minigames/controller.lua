@@ -298,4 +298,3 @@ AddEventHandler('onResourceStop', function(resource)
     SetNuiFocus(false, false)
     releasePed()
 end)
-
