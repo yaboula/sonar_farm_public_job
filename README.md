@@ -1,122 +1,71 @@
-# sonar_farm
+# Sonar Farm Public Job
 
-Script de farming escalable para **FiveM**, disenado como **plataforma** (no como un script simple). Arranca con verduras (MVP) sobre **QB-Core + ox_lib + ox_inventory + ox_target**, con arquitectura preparada para escalar en frameworks, cultivos, progresion, economia y sistemas jugables.
+Personal public-field farming for FiveM. Players work as an on-duty `farmer`, reserve a complete Field, optionally invite up to three nearby farmers, grow crops in authoritative slots, buy personal supplies and sell only their own harvest.
 
-> Regla de idioma: la documentacion (`docs/`) esta en **espanol**. El **codigo, UI, variables, comentarios, logs y configuracion estan 100% en ingles**.
+This is an independent sibling of `sonar_farm`. It does not read, migrate or modify `sonar_farm` tables.
 
-## Filosofia
+## v0.1.0 scope
 
-- **Server-authoritative (Zero-Trust):** el servidor es la unica fuente de verdad; el cliente solo envia intencion.
-- **Data-driven:** los cultivos y las zonas actuales viven en config, no en el codigo.
-- **Escalabilidad por diseno:** Bridge desacoplado y contratos internos preparados para ampliar el producto por etapas.
-- **Rendimiento primero:** 0.00 ms en reposo, crecimiento sin ticks (timestamp), culling agresivo, props client-side.
+- QB-Core, ox_lib, ox_inventory, ox_target and oxmysql.
+- Hub routes: Today, Fields, Market and Sell.
+- Six public Fields: Grapeseed S24/M40/L64 and Paleto S24/M40/L64. The QA Field is hidden unless `Config.Debug` is enabled.
+- Persistent 6/12/24-hour reservations, 15-minute grace, grace surcharge, purge and same-Field cooldown.
+- Co-op invitations with atomic one-reservation membership and `departing` ownership protection.
+- Personal 20-level progression with an idempotent XP ledger.
+- Personal Market, global Plus/Pro stock, one non-stackable tablet and immediate inventory delivery.
+- Quality-priced central Sell NPC with producer/resource metadata enforcement.
+- Durable economy operation IDs, receipts, compensation outbox and reconciliation.
+- Advanced crop care and Inspection HUD retained. Minigames ship as disabled future code.
 
-## Stack y dependencias
+Company, treasury, warehouse, P2P marketplace, staff, contracts, cargo, seasons, freshness and translations are outside v1.
 
-| Dependencia   | Uso                                              | Obligatoria |
-| ------------- | ------------------------------------------------ | ----------- |
-| QB-Core       | Framework base (MVP)                             | Si          |
-| ox_lib        | Notify, context menu, input, progressbar         | Si          |
-| ox_inventory  | Inventario + metadata de calidad                 | Si          |
-| ox_target     | Interaccion por objetivo                         | Si          |
-| oxmysql       | Persistencia (a partir de Etapa 2)               | Si          |
+## Installation
 
-## Estructura del proyecto
+1. Copy the resource as `sonar_farm_publicjob` and start dependencies first:
 
-```
-sonar_farm/
-  fxmanifest.lua
-  config/        Configuracion data-driven (config, crops, zones, minigames)
-  shared/        Constantes y utilidades puras (cliente + servidor)
-  bridge/        Capa de abstraccion (frameworks, inventory, target)
-  data/          Definiciones para copiar a otros recursos (items de ox_inventory)
-  database/      Esquema SQL
-  server/        Logica autoritativa de servidor + modulos
-    modules/
-      database/  Acceso a datos (oxmysql)
-      state/     Hot-state en RAM + crecimiento por timestamp
-      security/  Rate limiting y validacion anti-exploit
-      farming/   Acciones autoritativas: plant, care, harvest
-                  + cultivation opcional (fertilize, weed, treat pests)
-      minigames/ Sesiones, checkpoints y scoring autoritativo
-      logger/    Logging por niveles con conectores
-  client/        Motor visual, interaccion y herramientas de administracion
-  inspection-ui/ HUD agronomico React/Vite, transparente y sin foco
-  minigames-ui/  NUI React/Canvas 2D aislada del Business Hub
-  nui-shell/     Punto de entrada NUI unico y control de foco entre superficies
-  web/           Business Hub React (runtime FiveM + fixtures de navegador)
-  docs/          Documentacion tecnica (espanol)
-```
+   ```cfg
+   ensure oxmysql
+   ensure ox_lib
+   ensure qb-core
+   ensure ox_inventory
+   ensure ox_target
+   ensure sonar_farm_publicjob
+   ```
 
-## Instalacion (desarrollo)
+2. Follow [Installation](docs/INSTALLATION.md) for the QB job, ox_inventory items, ACE and SQL.
+3. Review [Economy](docs/ECONOMY.md), especially rental and Market prices.
+4. Run the [administration runbook](docs/RUNBOOK.md).
+5. Complete the [release checklist](docs/RELEASE_CHECKLIST.md) before tagging.
 
-1. Clonar dentro de `resources/[local]/` de tu servidor FiveM.
-2. Asegurar que `oxmysql`, `qb-core`, `ox_lib`, `ox_inventory` y `ox_target` estan iniciados antes.
-3. Copiar los items de [`data/ox_inventory_items.lua`](data/ox_inventory_items.lua) a `ox_inventory/data/items.lua` y reiniciar `ox_inventory`.
-4. Construir `inspection-ui/`, `minigames-ui/` y `web/` con `npm ci` y
-   `npm run build` en cada directorio. El shell carga los tres artefactos; el
-   HUD de inspeccion nunca toma foco y las otras dos superficies lo comparten
-   de forma excluyente.
-5. Conceder `sonar_farm.admin` y `sonar_farm.company_admin` solo a los
-   administradores correspondientes.
-   herramientas de desarrollo.
-6. Anadir `ensure sonar_farm` a tu `server.cfg`.
+Schema auto-creation is enabled by default. `database/install.sql` bootstraps persistent crops and the resource applies the versioned `sfpj_*` domain schema. `database/publicjob.sql` is provided for manual provisioning.
 
-```cfg
-add_ace group.admin sonar_farm.admin allow
-add_ace group.admin sonar_farm.company_admin allow
+## Configuration
+
+The main settings are in `config/config.lua`. Every Hub open, mutation and crop interaction is revalidated on the server for job, duty, reservation membership, level, inventory/tablet and physical presence where required.
+
+Public API:
+
+- Events: `sonar_farm_publicjob:cropPlanted`, `cropWatered`, `cropHarvested`, `cropFertilized`, `cropWeeded`, `cropTreated`.
+- Client exports: `exports.sonar_farm_publicjob:useSeed(...)` and `exports.sonar_farm_publicjob:openTablet()`.
+- ACE: `sonar_farm_publicjob.admin` and `sonar_farm_publicjob.fields_admin`.
+
+See [API](docs/API.md) for payload and security notes.
+
+## Development and verification
+
+```powershell
+lua tests/run.lua
+lua scripts/generate_items.lua --check
+
+cd web
+npm run typecheck
+npm run lint
+npm test
+npm run build
 ```
 
-El esquema de base de datos se crea solo al arrancar (`Config.Database.AutoCreateSchema`). Detalles y alternativa manual en [docs/RUNBOOK.md](docs/RUNBOOK.md).
+Run the same typecheck/lint/test/build sequence in `inspection-ui` and `minigames-ui`. The initial release remains `0.1.0`; create `v0.1.0` only after the multi-client FiveM E2E and all world placements are signed off.
 
-## Estado del proyecto
+## Provenance
 
-Etapas 1–4 estabilizadas, primer corte vertical de la Etapa 5 implementado y
-Advanced Crop Care disponible como rollout opt-in.
-Ver [docs/DECISIONES.md](docs/DECISIONES.md) para la vision completa,
-[docs/API.md](docs/API.md) para el contrato actual y [CHANGELOG.md](CHANGELOG.md)
-para el historial.
-
-- [x] Etapa 1 — Bootstrap del recurso + Bridge Layer
-- [x] Etapa 2 — Motor de estado + persistencia
-- [x] Etapa 3 — Logica de servidor autoritativa (plantar / cuidar / cosechar)
-- [x] Etapa 4 — Motor visual (streaming/culling + ox_target)
-- [~] Etapa 5 — Motor de minijuegos (Tomato Initial Planting)
-- [x] Advanced Crop Care — modelo causal opcional (`AdvancedCare = false`)
-- [x] Supplies Runtime V2 - Treasury, pedidos y Warehouse (`Supplies = false`)
-- [x] Crop Inspection Pulse Rail - diagnostico temporal sin foco (`InspectionHud = true`)
-- [ ] ... (ver docs/DECISIONES.md)
-
-Tomato se planta como trasplante mediante el minijuego de cuatro pasos
-Prepare → Place → Cover → Water. La NUI solo captura interaccion; el servidor
-reserva el slot, valida checkpoints, recalcula calidad y consume
-`tomato_seedling` al confirmar. Water/Harvest conservan barras placeholder hasta
-sus respectivos cortes de Etapa 5.
-
-Advanced Crop Care añade nutrientes, malas hierbas y plagas con crecimiento,
-producción, calidad y defectos causalmente separados. Se entrega desactivado por
-defecto para preservar exactamente el farming estabilizado; activación y objetos
-necesarios se documentan en [docs/RUNBOOK.md](docs/RUNBOOK.md).
-
-Supplies Runtime convierte el Business Hub en una superficie autoritativa:
-Tablet prepara, Office confirma contra Company Treasury y Warehouse entrega tras
-el plazo configurado. Los objetos empresariales conservan custodia y durabilidad.
-La validacion dentro de un servidor real se ejecuta con
-[`docs/TEST_SUPPLIES_RUNTIME_V2.md`](docs/TEST_SUPPLIES_RUNTIME_V2.md).
-
-Inspect abre una barra agronomica autoritativa junto al minimapa. Muestra diez
-minutos de historial, diez minutos de prevision sin cuidado, ETA, protecciones y
-una recomendacion causal. Se cierra sin bloquear movimiento, camara ni combate.
-La aceptación dentro del servidor está detallada en
-[`docs/TEST_CROP_INSPECTION_PULSE_RAIL.md`](docs/TEST_CROP_INSPECTION_PULSE_RAIL.md).
-
-La versión actual del recurso se encuentra en `VERSION`. El contrato frontend
-mantiene versionado independiente; el proceso de tags y paquetes está en
-[docs/RELEASING.md](docs/RELEASING.md).
-
-**Requisito de la Etapa 4:** los props de plantas (`bzzz_plants_*`) viven en su propio recurso de streaming, que debe estar iniciado. Si falta, el cliente avisa por consola con el nombre exacto del modelo y usa un respaldo. Ver [docs/RUNBOOK.md](docs/RUNBOOK.md).
-
-La version actual soporta **QB-Core**. Los adaptadores ESX y Qbox son stubs
-deliberados: si se seleccionan o detectan, el arranque falla de forma explicita
-en lugar de aceptar jugadores con un Bridge incompleto. `Config.Debug` viene
-desactivado; activarlo no concede permisos sin el ACE configurado.
+The reusable baseline came from local `sonar_farm` commit `8064bab`, including relevant working-tree versions, without modifying the source tree. Details are recorded in [ORIGIN_BASELINE.md](docs/ORIGIN_BASELINE.md).

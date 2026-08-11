@@ -47,7 +47,7 @@ las herramientas Basic no tienen residual. El servidor convierte esa cobertura
 a un `protectionUntil` real usando el `growth_time` almacenado del cultivo.
 
 El menú de cuidado muestra tanto el porcentaje como la duración concreta para
-el cultivo seleccionado. Supplies muestra el porcentaje porque aún no existe un
+el cultivo seleccionado. Market muestra el porcentaje porque aún no existe un
 cultivo concreto durante la compra.
 
 ## Inspección
@@ -81,14 +81,14 @@ lua scripts/generate_items.lua --check
 
 ## Prueba E2E en FiveM
 
-1. Activa `Config.Debug = true` y concede `sonar_farm.admin`.
+1. Activa `Config.Debug = true` y concede `sonar_farm_publicjob.admin`.
 2. Crea dos cultivos iguales con ciclos distintos:
    `/farm_debug_plant tomato 2400` y `/farm_debug_plant tomato 21600`.
 3. Aplica los mismos cuidados a porcentajes equivalentes del ciclo.
 4. Usa `/farm_debug_grow <id>` y la inspección para comparar estado.
-5. Guarda, reinicia `sonar_farm` durante una protección y vuelve a inspeccionar.
+5. Guarda, reinicia `sonar_farm_publicjob` durante una protección y vuelve a inspeccionar.
 6. Verifica que el vencimiento conserva el mismo porcentaje restante y que
-   pedidos, Warehouse, cooldowns y minijuegos no han cambiado de duración.
+   reservas, stock global, cooldowns y minijuegos no han cambiado de duración.
 
 Para acelerar una prueba no se editan tasas agrícolas: se cambia únicamente
 `growthTime` o se usa el segundo argumento de `/farm_debug_plant`.

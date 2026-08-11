@@ -1,22 +1,7 @@
-# Proceso de releases
+# Releasing
 
-El recurso FiveM y el contrato frontend tienen versiones independientes:
+Work only from `codex/publicjob-v1` until a reviewed merge. Use Conventional Commits and push each green module checkpoint.
 
-- `VERSION` y `fxmanifest.lua` definen la versión SemVer del recurso completo.
-- `web/src/frontendV1Contract.ts` define la versión del contrato de interfaz;
-  no tiene que coincidir con la versión del recurso.
+Do not create `v0.1.0` merely because builds pass. The tag requires the complete [release checklist](RELEASE_CHECKLIST.md), including multi-client FiveM races and in-game placement approval.
 
-## Preparar una versión
-
-1. Trabajar en una rama y mantener `main` como rama integrable.
-2. Actualizar `VERSION` y `fxmanifest.lua` con la misma versión SemVer.
-3. Mover los cambios relevantes desde `[Unreleased]` a una sección
-   `## [x.y.z] - AAAA-MM-DD` en `CHANGELOG.md`.
-4. Ejecutar `lua scripts/check_version.lua` y todos los gates del repositorio.
-5. Integrar el commit de release en `main`.
-6. Crear y publicar un tag anotado `vx.y.z` sobre ese commit.
-
-El workflow `release.yml` rechaza tags que no coincidan exactamente con
-`VERSION`, recompila la NUI, repite las regresiones y publica un ZIP limpio del
-recurso. Nunca debe crearse un tag sobre cambios sin commit o desde una rama con
-un gate fallido.
+Before tagging, update the changelog, verify the manifest version is `0.1.0`, build all three UIs, confirm the source `sonar_farm` working tree is unchanged, merge through review, then tag the reviewed commit.

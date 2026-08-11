@@ -3,12 +3,12 @@
 ## Evidence
 
 - Source visual truth: `C:/Users/aboul/AppData/Local/Temp/codex-clipboard-69f7ad19-dd61-4890-9106-50969996442f.png`
-- Direct normalized comparison: `D:/sonar_farm/inspection-ui/qa-reference-comparison-v3.png`
+- Direct normalized comparison: `D:/sonar_farm_publicjob/inspection-ui/qa-reference-comparison-v3.png`
 - Browser-rendered implementation:
-  - `D:/sonar_farm/inspection-ui/qa-1280x720-v3.png`
-  - `D:/sonar_farm/inspection-ui/qa-1453x720-v3.png`
-  - `D:/sonar_farm/inspection-ui/qa-1920x1080-v3.png`
-  - `D:/sonar_farm/inspection-ui/qa-2560x1080-v3.png`
+  - `D:/sonar_farm_publicjob/inspection-ui/qa-1280x720-v3.png`
+  - `D:/sonar_farm_publicjob/inspection-ui/qa-1453x720-v3.png`
+  - `D:/sonar_farm_publicjob/inspection-ui/qa-1920x1080-v3.png`
+  - `D:/sonar_farm_publicjob/inspection-ui/qa-2560x1080-v3.png`
 - Source pixels: 1104 × 123.
 - Normalized implementation crop: 1100 × 127 from a 1567 × 181 rail at the
   1920 × 1080 CSS viewport. Device scale is 1.

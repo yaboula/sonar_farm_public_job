@@ -20,7 +20,7 @@ npm ci
 npm run build
 ```
 
-Confirma estos valores y reinicia `sonar_farm`:
+Confirma estos valores y reinicia `sonar_farm_publicjob`:
 
 ```lua
 Config.Features.InspectionHud = true
@@ -104,7 +104,7 @@ Con el HUD abierto valida cada cierre por separado:
 - ejecutar reset/resync;
 - abrir Business Hub;
 - abrir/reanudar minijuego;
-- `restart sonar_farm`.
+- `restart sonar_farm_publicjob`.
 
 No debe quedar un iframe visible, foco retenido ni HUD huérfano tras ningún caso.
 
@@ -119,7 +119,7 @@ Prueba 1280×720, 1920×1080 y ultrawide:
 
 Con `resmon 1` registra:
 
-- HUD cerrado: `sonar_farm` debe estabilizarse en 0.00 ms y no emitir tráfico
+- HUD cerrado: `sonar_farm_publicjob` debe estabilizarse en 0.00 ms y no emitir tráfico
   periódico de inspección.
 - HUD abierto: solo existe evaluación local; el callback de inspección ocurre una
   vez por apertura y no cada segundo.
