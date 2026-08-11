@@ -1,4 +1,4 @@
--- sonar_farm - Dependency-free Lua regression suite.
+-- sonar_farm_publicjob - Dependency-free Lua regression suite.
 
 local passed = 0
 
@@ -20,7 +20,7 @@ end
 
 -- Minimal FiveM/ox environment used by shared and server-pure modules.
 function vec3(x, y, z) return { x = x, y = y, z = z } end
-function GetCurrentResourceName() return 'sonar_farm' end
+function GetCurrentResourceName() return 'sonar_farm_publicjob' end
 function IsDuplicityVersion() return true end
 function GetNetworkTimeAccurate() return os.time() * 1000 end
 function AddEventHandler() end
@@ -83,8 +83,9 @@ end)
 test('Field seed catalogue compiles stable versioned topology', function()
     local first, errors = Sonar.Fields.CompileSeeds()
     equal(#errors, 0, table.concat(errors, '; '))
-    equal(#first, 3, 'three canonical Fields expected')
-    local expected = { grapeseed_east = 40, grapeseed_south = 24, zone1 = 24 }
+    equal(#first, 7, 'six public Fields plus hidden QA Field expected')
+    local expected = { grapeseed_east = 40, grapeseed_south = 24, grapeseed_north = 64,
+        paleto_creek = 24, paleto_orchard = 40, paleto_highland = 64, zone1 = 24 }
     local ids = {}
     for _, field in ipairs(first) do
         equal(#field.slots, expected[field.id], field.id .. ' slot count')
@@ -122,18 +123,18 @@ test('Field topology validator rejects unsafe geometry and cross-Field overlap',
         'cross-Field overlap must be rejected')
 end)
 
-test('0.4 runtime keeps Fields independent and streams topology on demand', function()
+test('public-job runtime streams topology without company schema', function()
     local function read(path)
         local file = assert(io.open(path, 'rb')); local value = file:read('*a'); file:close(); return value
     end
     local hub = read('server/modules/hub/runtime.lua')
     local slots = read('client/modules/zones/slots.lua')
-    local schema = read('server/modules/fields/database.lua')
-    assert(hub:find("Config.Features.Fields", 1, true), 'Hub must expose Fields independently')
+    local schema = read('server/modules/publicjob/database.lua')
+    assert(hub:find("Reservations.Reserve", 1, true), 'Hub must dispatch public reservations')
     assert(hub:find("Fields.Subscribe", 1, true), 'Field Detail must use an authoritative subscription')
     assert(slots:find('function Slots.ReplaceFields', 1, true), 'nearby topology must replace Slot targets')
-    assert(schema:find('sf_field_revisions', 1, true) and schema:find('sf_field_outbox', 1, true),
-        'versioned topology and recovery outbox tables are required')
+    assert(schema:find('sfpj_field_revisions', 1, true) and schema:find('sfpj_economy_outbox', 1, true),
+        'versioned topology and economy recovery outbox tables are required')
 end)
 
 test('invalid operational config is rejected', function()
@@ -389,11 +390,12 @@ test('inspection callback accepts only crop identity and revalidates authority',
     local source = file:read('*a')
     file:close()
     assert(source:find('Runtime.GuardPlayer(source)', 1, true), 'runtime gate')
+    assert(source:find('PublicJob.Guard(source)', 1, true), 'job and duty gate')
     assert(source:find("Security.Consume(source, 1, 'inspection')", 1, true), 'inspection rate limit')
     assert(source:find('local cropId = request and request.cropId', 1, true), 'crop id is the only request input')
     assert(source:find('State.Get(cropId)', 1, true), 'authoritative crop lookup')
     assert(source:find('Validation.Distance(source', 1, true), 'server distance validation')
-    assert(source:find('Sync.RenderPayload(record, runtime.identifier)', 1, true), 'minimal synchronized snapshot')
+    assert(source:find('Sync.RenderPayload(record, actor.identifier)', 1, true), 'minimal synchronized snapshot')
     assert(not source:find('request.coords', 1, true), 'client coordinates are never trusted')
 
     local syncFile = assert(io.open('server/modules/sync/subscriptions.lua', 'rb'))
@@ -913,76 +915,35 @@ test('database rejects an empty but incompatible schema', function()
     equal(Database.ValidateSchema(), false, 'missing data column')
 end)
 
-test('company custody closes consumables and tools per consumed unit', function()
-    local transaction, outboxStatus = {}, {}
-    MySQL.insert = { await = function(_, values) outboxStatus[values[1]] = 'prepared'; return 1 end }
-    MySQL.single = { await = function(sql)
-        if sql:find('FROM sf_company_members', 1, true) then
-            return { company_id = 'company-test', identifier = 'citizen-test', display_name = 'Test Player',
-                role_key = 'worker', status = 'active', permissions = { 'warehouse.withdraw' },
-                treasury_cents = 0, monthly_budget_cents = 0 }
-        end
-        return nil
-    end }
-    MySQL.scalar = { await = function(sql, values)
-        if sql:find('FROM sf_material_issues', 1, true) then return 'issued' end
-        return outboxStatus[values[1]]
-    end }
-    MySQL.update = { await = function(_, values)
-        if outboxStatus[values[1]] == 'prepared' then outboxStatus[values[1]] = 'inventory_done'; return 1 end
-        return 0
-    end }
-    MySQL.transaction = { await = function(queries)
-        transaction = queries
-        local outboxId = queries[#queries].values[1]
-        outboxStatus[outboxId] = 'completed'
-        return true
-    end }
-    Bridge.Inventory.GetItemCount = function() return 1 end
-    dofile('server/modules/company/company.lua')
-
-    local consumableMetadata = { ownership = 'company', companyId = 'company-test',
-        issueId = 'issue-consumable', itemId = 'fertilizer_organic' }
-    local prepared, outboxId, payload = Company.PrepareItemUse(1, consumableMetadata, 'fertilize',
-        { slot = 1, count = 1, durability = 100 }, false)
-    equal(prepared, true, 'consumable custody is durably reserved before mutation')
-    Company.RecordItemUse(1, consumableMetadata, 'fertilize', false, outboxId, payload)
-    equal(transaction[1].values[1], 1, 'consumable increments consumed units')
-    equal(transaction[1].values[2], 1, 'consumable can close its custody total')
-
-    transaction = {}
-    local toolMetadata = { ownership = 'company', companyId = 'company-test', issueId = 'issue-tool', itemId = 'watering_can' }
-    prepared, outboxId, payload = Company.PrepareItemUse(1, toolMetadata, 'water',
-        { slot = 2, count = 1, durability = 5 }, true)
-    equal(prepared, true, 'broken tool custody is reserved')
-    Company.RecordItemUse(1, toolMetadata, 'water', true, outboxId, payload)
-    equal(transaction[1].values[1], 1, 'broken tool consumes one issued unit')
-    assert(transaction[2].query:find("status='consumed'", 1, true), 'warehouse tool unit is retired')
-
-    transaction = {}
-    prepared, outboxId, payload = Company.PrepareItemUse(1, toolMetadata, 'water',
-        { slot = 2, count = 1, durability = 50 }, false)
-    equal(prepared, true, 'ordinary tool custody is reserved')
-    Company.RecordItemUse(1, toolMetadata, 'water', false, outboxId, payload)
-    equal(transaction[1].values[1], 0, 'ordinary tool use does not consume the unit')
-    equal(#transaction, 2, 'ordinary tool use only updates custody and outbox')
-end)
-
-test('warehouse schema preserves tool durability and operation idempotency', function()
+test('progression ledger and reservation constraints are idempotent', function()
     local function read(path)
         local file = assert(io.open(path, 'rb'))
         local value = file:read('*a')
         file:close()
         return value
     end
-    local schema = read('server/modules/company/database.lua')
-    local service = read('server/modules/supplies/service.lua')
-    assert(schema:find('sf_warehouse_tool_units', 1, true), 'per-tool warehouse storage required')
-    assert(schema:find('uniq_sf_issue_operation', 1, true), 'withdrawal idempotency constraint required')
-    assert(service:find('identifier = member.identifier', 1, true), 'return outbox must bind its owner')
-    assert(service:find("ORDER BY durability,id LIMIT 1", 1, true), 'lowest durability warehouse tool selected first')
-    assert(service:find("row.status == 'prepared'", 1, true), 'prepared usage rows must be reconciled after a restart')
-    assert(service:find("Lock.With('member-custody:' .. member.identifier", 1, true), 'withdrawal and member removal share a custody lock')
+    local schema = read('server/modules/publicjob/database.lua')
+    local progression = read('server/modules/progression/service.lua')
+    local reservations = read('server/modules/reservations/service.lua')
+    assert(schema:find('PRIMARY KEY (`operation_id`)', 1, true), 'XP operation ids must be unique')
+    assert(schema:find('PRIMARY KEY (`field_id`)', 1, true), 'one active Field claim must be enforced')
+    assert(schema:find('PRIMARY KEY (`identifier`)', 1, true), 'one active player link must be enforced')
+    assert(progression:find('INSERT IGNORE INTO sfpj_xp_ledger', 1, true), 'XP awards must be idempotent')
+    assert(reservations:find("Lock.With('reservation:player:'", 1, true), 'reservation acceptance must share a player lock')
+end)
+
+test('personal economy persists receipts and a recovery outbox', function()
+    local function read(path)
+        local file = assert(io.open(path, 'rb')); local value = file:read('*a'); file:close(); return value
+    end
+    local schema = read('server/modules/publicjob/database.lua')
+    local market = read('server/modules/market/service.lua')
+    local sell = read('server/modules/sell/service.lua')
+    assert(schema:find('sfpj_economy_receipts', 1, true), 'economy receipts required')
+    assert(schema:find('sfpj_economy_outbox', 1, true), 'economy outbox required')
+    assert(market:find("Lock.With('market:global'", 1, true), 'Market stock mutations require a global lock')
+    assert(sell:find("metadata.producer == identifier", 1, true), 'Sell must enforce producer ownership')
+    assert(sell:find("metadata.resource == Sonar.Constants.RESOURCE", 1, true), 'Sell rejects foreign produce')
 end)
 
 local function v2Record(cropType, growthTime, plantedAt, values)
@@ -1189,6 +1150,81 @@ test('V2 material tiers cover the tomato cycle within seven four and two rounds'
                 ('%s needs %d applications, above the %s cap'):format(item.id, applications, item.tier))
         end
     end
+end)
+
+dofile('server/modules/progression/service.lua')
+
+test('public progression curve unlocks and perks match the v1 contract', function()
+    equal(Progression.Threshold(1), 0, 'level one threshold')
+    equal(Progression.Threshold(10), 17820, 'level ten threshold')
+    equal(Progression.Threshold(20), 79420, 'level twenty threshold')
+    equal(Progression.LevelForXp(17819), 9, 'level ten lower boundary')
+    equal(Progression.LevelForXp(17820), 10, 'level ten unlock boundary')
+    equal(Progression.LevelForXp(79420), 20, 'maximum level boundary')
+    equal(Progression.Perks(5).rentDiscount, 0.05, 'level five rent discount')
+    equal(Progression.Perks(10).sellBonus, 0.07, 'level ten sell bonus')
+    equal(Progression.Perks(20).rentDiscount, 0.25, 'level twenty rent discount')
+    equal(Config.Progression.ItemTierLevels.plus, 4, 'Plus unlock')
+    equal(Config.Progression.ItemTierLevels.pro, 8, 'Pro unlock')
+    equal(Config.Progression.FieldSizeLevels.M, 5, 'medium Field unlock')
+    equal(Config.Progression.FieldSizeLevels.L, 10, 'large Field unlock')
+end)
+
+test('reservation economy and expiry settings match the v1 contract', function()
+    equal(Config.Reservations.Prices.S[6], 1500, 'S six-hour price')
+    equal(Config.Reservations.Prices.M[12], 4300, 'M twelve-hour price')
+    equal(Config.Reservations.Prices.L[24], 11500, 'L twenty-four-hour price')
+    equal(Config.Reservations.MaximumRemainingSeconds, 86400, 'maximum remaining rental')
+    equal(Config.Reservations.GraceSeconds, 900, 'grace duration')
+    equal(Config.Reservations.GraceSurcharge, 0.25, 'grace surcharge')
+    equal(Config.Reservations.SameFieldCooldownSeconds, 1800, 'same Field cooldown')
+    equal(Config.Reservations.InviteTtlSeconds, 60, 'invite expiry')
+    equal(Config.Reservations.MaxGuests, 3, 'co-op guest cap')
+    equal(Config.Job.NearbyInviteDistance, 15.0, 'invite proximity')
+end)
+
+test('personal market and Sell settings match the v1 contract', function()
+    equal(Config.Market.MaxLines, 10, 'cart line cap')
+    equal(Config.Market.MaxLineQuantity, 99, 'per-line quantity cap')
+    equal(Config.Market.TabletPrice, 1500, 'tablet price')
+    equal(Config.Market.Stock.plus.capacity, 20, 'Plus stock capacity')
+    equal(Config.Market.Stock.plus.restockAmount, 5, 'Plus restock quantity')
+    equal(Config.Market.Stock.plus.restockSeconds, 1800, 'Plus restock interval')
+    equal(Config.Market.Stock.pro.capacity, 10, 'Pro stock capacity')
+    equal(Config.Market.Stock.pro.restockAmount, 2, 'Pro restock quantity')
+    equal(Config.Market.Stock.pro.restockSeconds, 3600, 'Pro restock interval')
+    equal(Config.Sell.BasePrices.carrot, 12, 'carrot price')
+    equal(Config.Sell.BasePrices.potato, 10, 'potato price')
+    equal(Config.Sell.BasePrices.lettuce, 14, 'lettuce price')
+    equal(Config.Sell.BasePrices.tomato, 16, 'tomato price')
+    equal(Config.Sell.TierMultipliers.premium, 2.0, 'Premium multiplier')
+    equal(Config.Features.Minigames, false, 'v1 minigames remain disabled')
+end)
+
+test('public callbacks retain server-side authority and recovery hooks', function()
+    local function read(path)
+        local file = assert(io.open(path, 'rb')); local value = file:read('*a'); file:close(); return value
+    end
+    local guard = read('server/modules/publicjob/database.lua')
+    local hub = read('server/modules/hub/runtime.lua')
+    local reservations = read('server/modules/reservations/service.lua')
+    local fields = read('server/modules/fields/service.lua')
+    local market = read('server/modules/market/service.lua')
+    local sell = read('server/modules/sell/service.lua')
+    assert(guard:find('job.name ~= Config.Job.Name', 1, true), 'job must be checked server-side')
+    assert(guard:find('Config.Job.RequireDuty and not job.onDuty', 1, true), 'duty must be checked server-side')
+    assert(hub:find("session.surface == 'tablet'", 1, true), 'tablet sessions must be distinguished')
+    assert(hub:find('Bridge.Inventory.HasItem', 1, true), 'tablet ownership must be revalidated')
+    assert(hub:find("session.surface ~= 'sell'", 1, true), 'sale confirmation requires the Sell surface')
+    assert(reservations:find("status='departing'", 1, true), 'departing co-op state must persist')
+    assert(reservations:find("return nil, 'reservation_grace'", 1, true), 'planting must stop in grace')
+    assert(reservations:find('return MySQL.update.await([[INSERT INTO sfpj_economy_operations', 1, true),
+        'reservation operation insert result must drive idempotency')
+    assert(fields:find('reservation = ownReservation', 1, true),
+        'Field Detail must never disclose another holder or co-op roster')
+    assert(market:find('sfpj_economy_outbox', 1, true), 'Market compensation must use the outbox')
+    assert(sell:find('metadata.producer == identifier', 1, true), 'Sell must enforce producer ownership')
+    assert(sell:find('metadata.resource == Sonar.Constants.RESOURCE', 1, true), 'Sell must reject foreign produce')
 end)
 
 print(('All %d tests passed.'):format(passed))

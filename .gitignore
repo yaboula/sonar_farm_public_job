@@ -2,6 +2,7 @@
 node_modules/
 web/node_modules/
 minigames-ui/node_modules/
+inspection-ui/node_modules/
 
 # Build output (NUI SPA)
 web/build/
