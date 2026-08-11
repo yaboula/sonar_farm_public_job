@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Plant action (server)
+    sonar_farm_publicjob - Plant action (server)
     Authoritative planting into a configured slot. The client sends only the crop
     type, zone key and slot index. Coordinates come from config on the server, so
     a modified client cannot choose where a crop lands or plant outside a plot.
@@ -65,10 +65,8 @@ lib.callback.register(CALLBACKS.PLANT, function(source, payload)
         local fieldAccess = Fields.ResolvePlantAccess(source, cropType, zoneKey, slotIndex)
         if not fieldAccess.ok then return reject(fieldAccess.reason) end
 
-        if fieldAccess.legacy then
-            local limit = Validation.CropLimit(source)
-            if not limit.ok then return reject(limit.reason) end
-        end
+        local limit = Validation.CropLimit(source)
+        if not limit.ok then return reject(limit.reason) end
 
         local seedCheck = Validation.GetSeedItem(source, def)
         if not seedCheck.ok then return reject(seedCheck.reason) end
@@ -92,20 +90,15 @@ lib.callback.register(CALLBACKS.PLANT, function(source, payload)
             careCount = 0,
             plantScore = score,
         })
-        if not fieldAccess.legacy then
-            cropData.fieldId = fieldAccess.field.id
-            cropData.topologyRevision = fieldAccess.field.revisionId
-            cropData.rowId = fieldAccess.slot.rowId
-            cropData.slotId = fieldAccess.slot.id
-            cropData.companyId = fieldAccess.companyId
-            cropData.planId = fieldAccess.planId
-            cropData.workType = fieldAccess.work.kind
-            cropData.workId = fieldAccess.work.id
-            cropData.plantedBy = runtime.identifier
-        end
+        cropData.fieldId = fieldAccess.field.id
+        cropData.topologyRevision = fieldAccess.field.revisionId
+        cropData.rowId = fieldAccess.slot.rowId
+        cropData.slotId = fieldAccess.slot.id
+        cropData.reservationId = fieldAccess.reservationId
+        cropData.plantedBy = runtime.identifier
         local cropId, record = State.Add({
             crop_type = cropType,
-            owner = fieldAccess.legacy and runtime.identifier or fieldAccess.companyId,
+            owner = runtime.identifier,
             zone = slot.zone,
             slot = slot.index,
             pos_x = slot.x,

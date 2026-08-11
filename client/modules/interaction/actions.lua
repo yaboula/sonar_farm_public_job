@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Player actions (client)
+    sonar_farm_publicjob - Player actions (client)
     The single place where the client asks the server to do something. Everything
     else (target options, item use, debug commands) routes through here, so the
     rejection handling and resync logic exist once.
@@ -276,8 +276,8 @@ function Actions.OpenCareMenu(action, cropId)
             onSelect = function() execute(cropId, selected.id) end,
         }
     end
-    lib.registerContext({ id = 'sonar_farm_care_' .. action, title = 'Select field material', options = options })
-    lib.showContext('sonar_farm_care_' .. action)
+    lib.registerContext({ id = 'sonar_farm_publicjob_care_' .. action, title = 'Select field material', options = options })
+    lib.showContext('sonar_farm_publicjob_care_' .. action)
 end
 
 --- Harvest a crop.
@@ -343,11 +343,11 @@ function Actions.OpenPlantMenu(zoneKey, slotIndex)
     end
 
     lib.registerContext({
-        id = 'sonar_farm_plant',
+        id = 'sonar_farm_publicjob_plant',
         title = 'Plant crop',
         options = options,
     })
-    lib.showContext('sonar_farm_plant')
+    lib.showContext('sonar_farm_publicjob_plant')
 end
 
 --- ox_inventory item use. Does not free-plant: it finds the nearest empty slot

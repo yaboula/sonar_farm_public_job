@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Entity pool (client)
+    sonar_farm_publicjob - Entity pool (client)
     Generic, content-agnostic ownership of client-side props. It knows how to
     create, track and destroy entities by key; it does not know what a crop is.
     Stage 9 machinery and future placeables reuse it as-is.
@@ -167,7 +167,7 @@ function Pool.Keys(tag)
 end
 
 -- Orphaned props are the classic dev-loop annoyance: without this, every
--- `restart sonar_farm` leaves props nobody can remove until the player reconnects.
+-- `restart sonar_farm_publicjob` leaves props nobody can remove until the player reconnects.
 AddEventHandler('onResourceStop', function(resource)
     if resource ~= GetCurrentResourceName() then return end
     Pool.Clear()

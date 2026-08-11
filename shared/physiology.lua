@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Plant physiology evaluator (shared)
+    sonar_farm_publicjob - Plant physiology evaluator (shared)
     Water, health and spoilage derived lazily from timestamps, exactly like
     growth: no ticks. A crop "lives" between interactions and its real condition
     is computed the moment someone looks at it.

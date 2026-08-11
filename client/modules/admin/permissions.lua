@@ -1,4 +1,4 @@
--- sonar_farm - Client entry gate for developer/admin tools.
+-- sonar_farm_publicjob - Client entry gate for developer/admin tools.
 
 Admin = Admin or {}
 

@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Logger (server)
+    sonar_farm_publicjob - Logger (server)
     Structured, level-based logging with decoupled connectors. Business code
     calls Logger.Info / Logger.Warn / Logger.Exploit and never worries about
     where logs go (console now; Discord / DB connectors wired here).
@@ -10,7 +10,7 @@
 Logger = Logger or {}
 
 local LEVELS = Sonar.Constants.LOG_LEVELS
-local PREFIX = '^5[sonar_farm]^7'
+local PREFIX = '^5[sonar_farm_publicjob]^7'
 
 -- Console colors per level.
 local LEVEL_COLOR = {
@@ -48,7 +48,7 @@ local function discordConnector(entry)
 
     local colorMap = { WARN = 16776960, EXPLOIT = 16711680 }
     local payload = {
-        username = 'sonar_farm',
+        username = 'sonar_farm_publicjob',
         embeds = {
             {
                 title = ('%s%s'):format(entry.level, entry.category and (' - ' .. entry.category) or ''),

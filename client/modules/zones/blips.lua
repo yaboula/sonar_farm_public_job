@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Zone blips (client)
+    sonar_farm_publicjob - Zone blips (client)
     Map markers for the public farming zones. A player who cannot find where to
     plant abandons the activity, so this is on by default; each zone can opt out
     in config/zones.lua.

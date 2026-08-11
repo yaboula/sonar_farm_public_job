@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Cell subscriptions (server)
+    sonar_farm_publicjob - Cell subscriptions (server)
     Decides which players hear about which crops. A client subscribes to the cell
     it stands in plus the adjacent ones and gets a snapshot; from then on it only
     receives deltas for those cells. An idle field costs zero network traffic.
@@ -105,10 +105,7 @@ function Sync.RenderPayload(record, identifier)
         topologyRevision = data.topologyRevision,
         rowId = data.rowId,
         slotId = data.slotId,
-        companyId = data.companyId,
-        planId = data.planId,
-        workType = data.workType,
-        workId = data.workId,
+        reservationId = data.reservationId,
         cell = record.cell,
         x = record.pos_x,
         y = record.pos_y,

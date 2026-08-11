@@ -101,6 +101,8 @@ function Fields.ValidateDefinition(definition)
         end
     end
     if count > 400 then errors[#errors + 1] = 'field exceeds 400 slots' end
+    local sizeClass = definition.sizeClass or 'S'
+    if sizeClass ~= 'S' and sizeClass ~= 'M' and sizeClass ~= 'L' then errors[#errors + 1] = 'field sizeClass must be S, M or L' end
     for _, crop in ipairs(definition.allowedCrops or {}) do
         if not Config.Crops[crop] then errors[#errors + 1] = 'unknown allowed crop ' .. tostring(crop) end
     end
@@ -119,8 +121,8 @@ function Fields.Compile(definition)
     local width, height, legacyIndex = math.max(0.01, maxX - minX), math.max(0.01, maxY - minY), 0
     local compiled = {
         id = definition.id, legacyZone = definition.legacyZone, name = definition.name, location = definition.location,
-        orientation = definition.orientation or 0, starterEligible = definition.starterEligible == true,
-        starterPriority = tonumber(definition.starterPriority) or 999, purchasePrice = tonumber(definition.purchasePrice) or 0,
+        region = definition.region or 'Grapeseed', sizeClass = definition.sizeClass or 'S',
+        orientation = definition.orientation or 0,
         catalogVisible = definition.catalogVisible ~= false, allowedCrops = definition.allowedCrops or {},
         access = definition.access, blip = definition.blip, bounds = { width = width, height = height }, rows = {}, slots = {},
     }

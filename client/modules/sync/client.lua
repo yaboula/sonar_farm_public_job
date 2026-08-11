@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Sync client (client)
+    sonar_farm_publicjob - Sync client (client)
     The single thread that drives the whole visual engine. It watches which
     spatial cell the player is in, resubscribes when that changes, and reconciles
     the rendered props on each pass.

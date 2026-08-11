@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Bridge wrapper: ox_inventory
+    sonar_farm_publicjob - Bridge wrapper: ox_inventory
     Thin, server-authoritative wrapper over ox_inventory exports. Populates
     Bridge.Inventory. All item mutations happen on the server by design; the
     metadata field carries crop attributes (quality, freshness, moisture).

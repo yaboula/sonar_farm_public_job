@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Shared pure utilities
+    sonar_farm_publicjob - Shared pure utilities
     Small, side-effect-free helpers usable on both client and server.
     Namespaced under the global `Sonar` table.
 ]]

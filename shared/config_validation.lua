@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Configuration validation (shared, pure)
+    sonar_farm_publicjob - Configuration validation (shared, pure)
     Validates structural invariants before the server accepts gameplay.
 ]]
 
@@ -37,9 +37,9 @@ local function range(errors, path, value, minimum, maximum)
 end
 
 local function validateFramework(errors)
-    local supported = { auto = true, ['qb-core'] = true, esx = true, qbox = true }
+    local supported = { ['qb-core'] = true }
     if not supported[Config.Framework] then
-        errors[#errors + 1] = 'Config.Framework must be auto, qb-core, esx or qbox.'
+        errors[#errors + 1] = 'Config.Framework must be qb-core in this release.'
     end
 
     if type(Config.FrameworkPriority) ~= 'table' or #Config.FrameworkPriority == 0 then
@@ -392,8 +392,8 @@ local function validateAdvancedCare(errors)
     end
 
     local catalog = Sonar.ItemCatalog
-    if type(catalog) ~= 'table' or type(catalog.items) ~= 'table' or #catalog.items ~= 21 then
-        errors[#errors + 1] = 'Sonar.ItemCatalog must contain exactly 21 canonical items.'
+    if type(catalog) ~= 'table' or type(catalog.items) ~= 'table' or #catalog.items ~= 22 then
+        errors[#errors + 1] = 'Sonar.ItemCatalog must contain exactly 22 canonical items.'
         return
     end
     local counts = { water = 0, weed = 0, fertilize = 0, treat_pest = 0 }
@@ -454,34 +454,12 @@ local function validateSection(errors, name, fn, ...)
     end
 end
 
-local function validateSupplies(errors)
-    local cfg = Config.Supplies
-    if type(cfg) ~= 'table' then errors[#errors + 1] = 'Config.Supplies must be a table.'; return end
-    nonEmptyString(errors, 'Config.Supplies.Ace', cfg.Ace)
-    for _, key in ipairs({ 'DraftTtlSeconds','MaxDraftLines','MaxLineQuantity','MonthlyBudget','BootstrapTreasury','ProcurementLimit','DeliveryWorkerSeconds','UsageRecoveryGraceSeconds','SessionTtlSeconds','InteractionDistance' }) do
-        positive(errors, 'Config.Supplies.' .. key, cfg[key], false)
-    end
-    range(errors, 'Config.Supplies.SupplierFeeRate', cfg.SupplierFeeRate, 0, 1)
-    for _, tier in ipairs({ 'plus', 'pro' }) do
-        local stock = cfg.SupplierStock and cfg.SupplierStock[tier]
-        if type(stock) ~= 'table' then errors[#errors + 1] = 'Config.Supplies.SupplierStock.' .. tier .. ' must be a table.'
-        else
-            positive(errors, 'Config.Supplies.SupplierStock.' .. tier .. '.capacity', stock.capacity, false)
-            positive(errors, 'Config.Supplies.SupplierStock.' .. tier .. '.restockAmount', stock.restockAmount, false)
-            positive(errors, 'Config.Supplies.SupplierStock.' .. tier .. '.restockSeconds', stock.restockSeconds, false)
-            if finite(stock.capacity) and finite(stock.restockAmount) and stock.restockAmount > stock.capacity then
-                errors[#errors + 1] = 'Config.Supplies.SupplierStock.' .. tier .. '.restockAmount cannot exceed capacity.'
-            end
-        end
-    end
-end
-
 local function validateFields(errors)
     local cfg = Config.Fields
     if type(cfg) ~= 'table' then errors[#errors + 1] = 'Config.Fields must be a table.'; return end
     nonEmptyString(errors, 'Config.Fields.Ace', cfg.Ace)
     for _, key in ipairs({ 'InteractionDistance', 'DetailRefreshSeconds', 'MaxEventsPerDetail',
-        'MinimumSlotSpacing', 'PurchaseDraftTtlSeconds', 'BuyerOrderWorkerSeconds' }) do
+        'MinimumSlotSpacing' }) do
         positive(errors, 'Config.Fields.' .. key, cfg[key], false)
     end
     local fields, compileErrors = Sonar.Fields.CompileSeeds()
@@ -496,35 +474,60 @@ local function validateFields(errors)
             coordinates[key] = field.id
         end
     end
-    if Config.Features.CompanyFieldAuthority and not (Config.Features.Fields and Config.Features.Work and Config.Features.CompanyCargo) then
-        errors[#errors + 1] = 'CompanyFieldAuthority requires Fields, Work and CompanyCargo.'
-    end
-    if Config.Features.PublicContracts and not (Config.Features.Fields and Config.Features.Work and Config.Features.CompanyCargo) then
-        errors[#errors + 1] = 'PublicContracts requires Fields, Work and CompanyCargo.'
-    end
-    if Config.Features.BuyerOrders and not (Config.Features.Fields and Config.Features.CompanyCargo) then
-        errors[#errors + 1] = 'BuyerOrders requires Fields and CompanyCargo.'
-    end
-    local templateIds = {}
-    for index, template in ipairs(cfg.BuyerOrderTemplates or {}) do
-        local path = ('Config.Fields.BuyerOrderTemplates[%d]'):format(index)
-        nonEmptyString(errors, path .. '.id', template.id)
-        nonEmptyString(errors, path .. '.buyer', template.buyer)
-        nonEmptyString(errors, path .. '.product', template.product)
-        if templateIds[template.id] then errors[#errors + 1] = path .. '.id must be unique.' end
-        templateIds[template.id] = true
-        local item = Sonar.ItemCatalog.byId[template.product]
-        if not item or item.category ~= 'Produce' then errors[#errors + 1] = path .. '.product must be a harvested product.' end
-        for _, key in ipairs({ 'quantity', 'intervalSeconds', 'deadlineSeconds', 'payout' }) do
-            positive(errors, path .. '.' .. key, template[key], false)
+end
+
+local function validatePublicJob(errors)
+    if Config.Framework ~= 'qb-core' then errors[#errors + 1] = 'Public Job v1 requires qb-core.' end
+    nonEmptyString(errors, 'Config.Job.Name', Config.Job and Config.Job.Name)
+    if type(Config.Job and Config.Job.RequireDuty) ~= 'boolean' then errors[#errors + 1] = 'Config.Job.RequireDuty must be boolean.' end
+    positive(errors, 'Config.Job.NearbyInviteDistance', Config.Job and Config.Job.NearbyInviteDistance, false)
+
+    local progression = Config.Progression or {}
+    if progression.MaxLevel ~= 20 then errors[#errors + 1] = 'Config.Progression.MaxLevel must be 20.' end
+    positive(errors, 'Config.Progression.CurveCoefficient', progression.CurveCoefficient, false)
+    positive(errors, 'Config.Progression.PlantXp', progression.PlantXp, false)
+    positive(errors, 'Config.Progression.EffectiveCareXp', progression.EffectiveCareXp, false)
+    for tier, level in pairs({ basic = 1, plus = 4, pro = 8 }) do
+        if progression.ItemTierLevels and progression.ItemTierLevels[tier] ~= level then
+            errors[#errors + 1] = ('Config.Progression.ItemTierLevels.%s must be %d.'):format(tier, level)
         end
-        if not finite(template.minimumQuality) or template.minimumQuality < 0 or template.minimumQuality > 100 then
-            errors[#errors + 1] = path .. '.minimumQuality must be between 0 and 100.'
+    end
+    for size, level in pairs({ S = 1, M = 5, L = 10 }) do
+        if progression.FieldSizeLevels and progression.FieldSizeLevels[size] ~= level then
+            errors[#errors + 1] = ('Config.Progression.FieldSizeLevels.%s must be %d.'):format(size, level)
         end
-        local coords = template.destination and template.destination.coords
-        if type(coords) ~= 'table' and type(coords) ~= 'vector3' then
-            errors[#errors + 1] = path .. '.destination.coords must be configured.'
+    end
+
+    local reservations = Config.Reservations or {}
+    for _, hours in ipairs({ 6, 12, 24 }) do
+        positive(errors, ('Config.Reservations.Plans.%d'):format(hours), reservations.Plans and reservations.Plans[hours], false)
+        for _, size in ipairs({ 'S', 'M', 'L' }) do
+            positive(errors, ('Config.Reservations.Prices.%s.%d'):format(size, hours),
+                reservations.Prices and reservations.Prices[size] and reservations.Prices[size][hours], false)
         end
+    end
+    positive(errors, 'Config.Reservations.MaximumRemainingSeconds', reservations.MaximumRemainingSeconds, false)
+    positive(errors, 'Config.Reservations.GraceSeconds', reservations.GraceSeconds, false)
+    range(errors, 'Config.Reservations.GraceSurcharge', reservations.GraceSurcharge, 0, 1)
+    if reservations.MaxGuests ~= 3 then errors[#errors + 1] = 'Config.Reservations.MaxGuests must be 3.' end
+
+    local market = Config.Market or {}
+    nonEmptyString(errors, 'Config.Market.TabletItem', market.TabletItem)
+    positive(errors, 'Config.Market.TabletPrice', market.TabletPrice, false)
+    if type(market.Markets) ~= 'table' or #market.Markets ~= 2 then errors[#errors + 1] = 'Exactly two physical Markets are required.' end
+    for tier, expected in pairs({ plus = { 20, 5, 1800 }, pro = { 10, 2, 3600 } }) do
+        local stock = market.Stock and market.Stock[tier]
+        if not stock or stock.capacity ~= expected[1] or stock.restockAmount ~= expected[2]
+            or stock.restockSeconds ~= expected[3] then errors[#errors + 1] = 'Invalid Market stock policy for ' .. tier .. '.' end
+    end
+    if market.MaxLines ~= 10 or market.MaxLineQuantity ~= 99 then errors[#errors + 1] = 'Market cart limits must be 10 lines and 99 units.' end
+
+    local sell = Config.Sell or {}
+    for _, crop in ipairs({ 'carrot', 'potato', 'lettuce', 'tomato' }) do
+        positive(errors, 'Config.Sell.BasePrices.' .. crop, sell.BasePrices and sell.BasePrices[crop], false)
+    end
+    for _, tier in ipairs({ 'poor', 'standard', 'fine', 'premium' }) do
+        positive(errors, 'Config.Sell.TierMultipliers.' .. tier, sell.TierMultipliers and sell.TierMultipliers[tier], false)
     end
 end
 
@@ -537,8 +540,8 @@ function ConfigValidation.Validate()
     validateSection(errors, 'Minigame', validateMinigames)
     validateSection(errors, 'AdvancedCare', validateAdvancedCare)
     validateSection(errors, 'Inspection', validateInspection)
-    validateSection(errors, 'Supplies', validateSupplies)
     validateSection(errors, 'Fields', validateFields)
+    validateSection(errors, 'PublicJob', validatePublicJob)
 
     nonEmptyString(errors, 'Config.Admin.Ace', Config.Admin and Config.Admin.Ace)
     positive(errors, 'Config.SaveInterval', Config.SaveInterval, false)

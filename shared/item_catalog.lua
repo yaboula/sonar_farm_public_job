@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Canonical item and supplier catalog
+    sonar_farm_publicjob - Canonical item and supplier catalog
 
     This is the only authored source for inventory definitions, supplier
     pricing and Advanced Crop Care effects. data/ox_inventory_items.lua is a
@@ -10,6 +10,7 @@
 Sonar = Sonar or {}
 
 local items = {
+    { id = 'farm_tablet', label = 'Farmer Tablet', weight = 650, stack = false, category = 'Access', tier = 'basic', price = 1500, market = false, description = 'Opens the public farming Hub from anywhere while carried.' },
     { id = 'carrot_seed', label = 'Carrot Seeds', weight = 10, stack = true, category = 'Seeds', tier = 'basic', price = 24, leadMinutes = 5, market = true, cropRelation = 'Carrots', description = 'A packet of reliable carrot seed for direct field sowing.', seed = true },
     { id = 'potato_seed', label = 'Potato Seeds', weight = 10, stack = true, category = 'Seeds', tier = 'basic', price = 28, leadMinutes = 5, market = true, cropRelation = 'Potatoes', description = 'Selected seed potatoes prepared for field planting.', seed = true },
     { id = 'lettuce_seed', label = 'Lettuce Seeds', weight = 8, stack = true, category = 'Seeds', tier = 'basic', price = 22, leadMinutes = 5, market = true, cropRelation = 'Lettuce', description = 'Fast-growing lettuce seed that rewards careful watering.', seed = true },

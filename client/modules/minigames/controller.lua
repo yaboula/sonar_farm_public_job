@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Planting NUI controller (client)
+    sonar_farm_publicjob - Planting NUI controller (client)
 
     Owns focus, ped state, local props and lifecycle monitoring. The browser is a
     renderer/input surface only: every checkpoint is forwarded to the server and

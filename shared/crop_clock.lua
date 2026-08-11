@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Versioned crop-cycle clock
+    sonar_farm_publicjob - Versioned crop-cycle clock
 
     V2 agricultural simulation is expressed as fractions of the crop's stored
     growth_time. Operational clocks (cooldowns, UI refresh, supplier workers)

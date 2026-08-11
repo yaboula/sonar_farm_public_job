@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Quality (server)
+    sonar_farm_publicjob - Quality (server)
     The contract between farming actions and whatever decides "how well did the
     player perform". Today a stub returns a flat score; in Stage 5 the minigame
     module registers a real provider and NOTHING in plant/care/harvest changes.

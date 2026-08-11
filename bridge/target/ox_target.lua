@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Bridge wrapper: ox_target
+    sonar_farm_publicjob - Bridge wrapper: ox_target
     Client-side wrapper over ox_target exports. Populates Bridge.Target.
     Used by the interaction layer (Stage 4+) to attach options to crops/zones.
 ]]

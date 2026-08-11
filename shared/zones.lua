@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Zone and slot resolver (shared)
+    sonar_farm_publicjob - Zone and slot resolver (shared)
     Turns zone definitions into a flat, indexed list of planting slots.
 
     Slots replaced free-planting: a crop can only exist at a configured plot.

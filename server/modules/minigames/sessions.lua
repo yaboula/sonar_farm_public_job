@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Authoritative planting minigame lifecycle
+    sonar_farm_publicjob - Authoritative planting minigame lifecycle
 
     Sessions reserve a real planting slot in hot state before the NUI opens.
     Checkpoints are ordered, bounded and rescored on the server. The seedling is

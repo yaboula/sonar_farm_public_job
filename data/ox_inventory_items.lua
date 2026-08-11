@@ -3,6 +3,18 @@
 -- Run: lua scripts/generate_items.lua
 
 return {
+    ["farm_tablet"] = {
+        label = "Farmer Tablet",
+        weight = 650,
+        stack = false,
+        close = true,
+        description = "Opens the public farming Hub from anywhere while carried.",
+        consume = 0,
+        client = {
+            export = 'sonar_farm_publicjob.openTablet',
+        },
+    },
+
     ["carrot_seed"] = {
         label = "Carrot Seeds",
         weight = 10,
@@ -10,7 +22,7 @@ return {
         close = true,
         description = "A packet of reliable carrot seed for direct field sowing.",
         client = {
-            export = 'sonar_farm.useSeed',
+            export = 'sonar_farm_publicjob.useSeed',
         },
     },
 
@@ -21,7 +33,7 @@ return {
         close = true,
         description = "Selected seed potatoes prepared for field planting.",
         client = {
-            export = 'sonar_farm.useSeed',
+            export = 'sonar_farm_publicjob.useSeed',
         },
     },
 
@@ -32,7 +44,7 @@ return {
         close = true,
         description = "Fast-growing lettuce seed that rewards careful watering.",
         client = {
-            export = 'sonar_farm.useSeed',
+            export = 'sonar_farm_publicjob.useSeed',
         },
     },
 
@@ -51,7 +63,7 @@ return {
         close = true,
         description = "A nursery-grown tomato transplant ready for careful field planting.",
         client = {
-            export = 'sonar_farm.useSeed',
+            export = 'sonar_farm_publicjob.useSeed',
         },
     },
 

@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Advanced cultivation actions (server authoritative)
+    sonar_farm_publicjob - Advanced cultivation actions (server authoritative)
 
     Fertilize, weed and pest treatment share the same hardened action pipeline
     as watering. The callbacks remain registered while the rollout flag is off,
@@ -65,9 +65,9 @@ lib.callback.register(CALLBACKS.FERTILIZE, function(source, payload)
         if not consumed then return reject(REJECT.MISSING_TOOL) end
 
         local nutrients, excess = Physiology.Fertilize(record, effect, selected.definition)
-        Items.RecordCompanyUse(source, selected, ACTIONS.FERTILIZE, false)
+        Items.RecordUse(source, selected, ACTIONS.FERTILIZE, false)
         Fields.RecordOperation(source, record, ACTIONS.FERTILIZE, fieldAccess,
-            { itemId = selected.definition.id, nutrients = nutrients })
+            { itemId = selected.definition.id, nutrients = nutrients, changed = true })
         local updated = State.Get(record.id)
         Sync.OnCropChanged(updated)
         TriggerEvent(PUBLIC.CROP_FERTILIZED, {
@@ -97,9 +97,9 @@ lib.callback.register(CALLBACKS.WEED, function(source, payload)
         local consumed, broken = Items.Consume(source, selected)
         if not consumed then return reject(REJECT.MISSING_TOOL) end
         local weedCover = Physiology.Weed(record, selected.effect, selected.definition)
-        Items.RecordCompanyUse(source, selected, ACTIONS.WEED, broken)
+        Items.RecordUse(source, selected, ACTIONS.WEED, broken)
         Fields.RecordOperation(source, record, ACTIONS.WEED, fieldAccess,
-            { itemId = selected.definition.id, toolBroken = broken, weeds = weedCover })
+            { itemId = selected.definition.id, toolBroken = broken, weeds = weedCover, changed = true })
         Sync.OnCropChanged(State.Get(record.id))
         TriggerEvent(PUBLIC.CROP_WEEDED, {
             cropId = record.id, cropType = record.crop_type, owner = record.owner,
@@ -129,9 +129,9 @@ lib.callback.register(CALLBACKS.TREAT_PEST, function(source, payload)
         if not consumed then return reject(REJECT.MISSING_TOOL) end
 
         local pestPressure = Physiology.TreatPests(record, effect, selected.definition)
-        Items.RecordCompanyUse(source, selected, ACTIONS.TREAT_PEST, false)
+        Items.RecordUse(source, selected, ACTIONS.TREAT_PEST, false)
         Fields.RecordOperation(source, record, ACTIONS.TREAT_PEST, fieldAccess,
-            { itemId = selected.definition.id, pests = pestPressure })
+            { itemId = selected.definition.id, pests = pestPressure, changed = true })
         Sync.OnCropChanged(State.Get(record.id))
         TriggerEvent(PUBLIC.CROP_TREATED, {
             cropId = record.id, cropType = record.crop_type, owner = record.owner,

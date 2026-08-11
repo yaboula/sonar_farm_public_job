@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Minigame registry (data-driven)
+    sonar_farm_publicjob - Minigame registry (data-driven)
     Minigames are their own module (Stage 5). This maps a farming action to the
     minigame that gates its quality/XP outcome. The server always validates the
     final score; the client cannot self-report a perfect result.

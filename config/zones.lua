@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Public farming zones and planting slots (data-driven)
+    sonar_farm_publicjob - Public farming zones and planting slots (data-driven)
 
     Crops grow only at configured slots. Free-planting was dropped because it
     produced overlapping props, messy-looking fields and no way to cap how much a

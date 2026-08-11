@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Client test commands
+    sonar_farm_publicjob - Client test commands
     Shortcuts for testing without hunting for a prop to aim at. Everything routes
     through the Actions layer, so these exercise exactly the same path as the
     ox_target interactions: no special-cased debug logic anywhere.
@@ -62,7 +62,7 @@ RegisterCommand('farm_render', function()
     Bridge.Notify(('Cached %d crop(s), %d prop(s), %d slots. See F8.')
         :format(Crops.Count(), Pool.Count(), Sonar.Zones.TotalSlots()), NOTIFY.INFO)
 
-    print(('[sonar_farm] cache=%d props=%d slots=%d clockOffset=%ds interior=%s')
+    print(('[sonar_farm_publicjob] cache=%d props=%d slots=%d clockOffset=%ds interior=%s')
         :format(Crops.Count(), Pool.Count(), Sonar.Zones.TotalSlots(),
             Sonar.Time.Offset(), tostring(GetInteriorFromEntity(PlayerPedId()) ~= 0)))
 
@@ -70,7 +70,7 @@ RegisterCommand('farm_render', function()
         local record = Crops.Get(cropId)
         local condition = Crops.Condition(cropId)
         if record and condition then
-            print(('[sonar_farm] %s | %s | zone=%s slot=%s | %.1fm | %s | growth %d%% | water %d%% | health %d%% | mine=%s | model=%s')
+            print(('[sonar_farm_publicjob] %s | %s | zone=%s slot=%s | %.1fm | %s | growth %d%% | water %d%% | health %d%% | mine=%s | model=%s')
                 :format(cropId, record.crop_type, tostring(record.zone), tostring(record.slot),
                     Sonar.Utils.Distance(coords, { x = record.pos_x, y = record.pos_y, z = record.pos_z }),
                     condition.state, math.floor(condition.progress * 100),

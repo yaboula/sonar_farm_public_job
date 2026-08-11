@@ -6,6 +6,8 @@ local REJECT = Sonar.Constants.REJECT
 lib.callback.register(CALLBACKS.INSPECT, function(source, request)
     local runtime = Runtime.GuardPlayer(source)
     if not runtime.ok then return runtime end
+    local actor, reason = PublicJob.Guard(source)
+    if not actor then return { ok = false, reason = reason } end
     if not Security.Consume(source, 1, 'inspection') then
         return { ok = false, reason = REJECT.RATE_LIMITED }
     end
@@ -25,6 +27,6 @@ lib.callback.register(CALLBACKS.INSPECT, function(source, request)
     return {
         ok = true,
         serverTime = now,
-        crop = Sync.RenderPayload(record, runtime.identifier),
+        crop = Sync.RenderPayload(record, actor.identifier),
     }
 end)

@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Crop definitions (data-driven)
+    sonar_farm_publicjob - Crop definitions (data-driven)
     The engine is crop-agnostic: it reads these tables at runtime. Adding a new
     crop never requires touching core logic.
 

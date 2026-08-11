@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Validation (server)
+    sonar_farm_publicjob - Validation (server)
     Multi-level authoritative checks. Every function returns a uniform
     { ok = boolean, reason? = string } so handlers can reject consistently.
 
@@ -171,12 +171,21 @@ function Validation.Slot(source, zoneKey, slotIndex, cropType)
         return fail(REJECT.SLOT_NOT_FOUND)
     end
 
-    local slot = Sonar.Zones.Slot(zoneKey, slotIndex)
+    local slot = Fields and Fields.ResolveLegacySlot and Fields.ResolveLegacySlot(zoneKey, slotIndex)
+        or Sonar.Zones.Slot(zoneKey, slotIndex)
     if not slot then
         return fail(REJECT.SLOT_NOT_FOUND)
     end
 
-    if not Sonar.Zones.AllowsCrop(zoneKey, cropType) then
+    local field = slot.fieldId and Fields.Get(slot.fieldId) or nil
+    local allowed = true
+    if field and field.allowedCrops and #field.allowedCrops > 0 then
+        allowed = false
+        for _, value in ipairs(field.allowedCrops) do if value == cropType then allowed = true; break end end
+    elseif not field then
+        allowed = Sonar.Zones.AllowsCrop(zoneKey, cropType)
+    end
+    if not allowed then
         return fail(REJECT.CROP_NOT_ALLOWED_HERE)
     end
 
@@ -218,10 +227,16 @@ function Validation.GetSeedItem(source, def)
     if not def then return fail(REJECT.UNKNOWN_CROP) end
     local primary = def.seedItem
     if primary and Bridge.Inventory.HasItem(source, primary, 1) then
+        local definition = Sonar.ItemCatalog.byId[primary]
+        local allowed = Progression.CanUseTier(Bridge.GetIdentifier(source), definition and definition.tier or 'basic')
+        if not allowed then return fail(REJECT.LEVEL_REQUIRED) end
         return { ok = true, item = primary }
     end
     local legacy = def.legacySeedItem
     if legacy and Bridge.Inventory.HasItem(source, legacy, 1) then
+        local definition = Sonar.ItemCatalog.byId[legacy]
+        local allowed = Progression.CanUseTier(Bridge.GetIdentifier(source), definition and definition.tier or 'basic')
+        if not allowed then return fail(REJECT.LEVEL_REQUIRED) end
         return { ok = true, item = legacy }
     end
     return fail(REJECT.MISSING_SEED)

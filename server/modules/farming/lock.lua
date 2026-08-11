@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - In-flight action locks (server)
+    sonar_farm_publicjob - In-flight action locks (server)
     Guards against the same crop being acted on twice concurrently. Without this
     two harvest callbacks arriving together could both pass validation and each
     deliver produce before either removed the crop from state (duplication).

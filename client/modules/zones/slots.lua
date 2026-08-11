@@ -1,7 +1,7 @@
 --[[
-    sonar_farm - Planting slots & target interactions (client)
+    sonar_farm_publicjob - Planting slots & target interactions (client)
     One ox_target sphere per nearby authoritative plot (or permanent configured
-    plot while Company Field authority is disabled). Handles the full
+    plot while public Field topology is active). Handles the full
     interaction lifecycle for a slot:
       - Empty slot    → Shows "Plant seeds"
       - Occupied slot → Shows "Inspect", "Water" (if thirsty), "Harvest" (if ready/dead)
@@ -44,13 +44,13 @@ local function createSphereZone(slot, key)
     local distance = Config.Render.TargetDistance or 2.2
 
     return Bridge.Target.AddSphereZone({
-        name   = ('sonar_farm:slot:%s'):format(key),
+        name   = ('sonar_farm_publicjob:slot:%s'):format(key),
         coords = vec3(slot.x, slot.y, slot.z),
         radius = radius,
         debug  = false,
         options = {
             {
-                name     = ('sonar_farm:plant:%s'):format(key),
+                name     = ('sonar_farm_publicjob:plant:%s'):format(key),
                 label    = 'Plant crop',
                 icon     = 'fa-solid fa-seedling',
                 distance = distance,
@@ -62,7 +62,7 @@ local function createSphereZone(slot, key)
                 end,
             },
             {
-                name     = ('sonar_farm:inspect:%s'):format(key),
+                name     = ('sonar_farm_publicjob:inspect:%s'):format(key),
                 label    = 'Inspect',
                 icon     = 'fa-solid fa-magnifying-glass',
                 distance = distance,
@@ -75,7 +75,7 @@ local function createSphereZone(slot, key)
                 end,
             },
             {
-                name     = ('sonar_farm:resume:%s'):format(key),
+                name     = ('sonar_farm_publicjob:resume:%s'):format(key),
                 label    = 'Resume planting',
                 icon     = 'fa-solid fa-seedling',
                 distance = distance,
@@ -92,7 +92,7 @@ local function createSphereZone(slot, key)
                 end,
             },
             {
-                name     = ('sonar_farm:clear-incomplete:%s'):format(key),
+                name     = ('sonar_farm_publicjob:clear-incomplete:%s'):format(key),
                 label    = 'Clear incomplete planting',
                 icon     = 'fa-solid fa-xmark',
                 distance = distance,
@@ -108,7 +108,7 @@ local function createSphereZone(slot, key)
                 end,
             },
             {
-                name     = ('sonar_farm:water:%s'):format(key),
+                name     = ('sonar_farm_publicjob:water:%s'):format(key),
                 label    = 'Water',
                 icon     = 'fa-solid fa-droplet',
                 distance = distance,
@@ -127,7 +127,7 @@ local function createSphereZone(slot, key)
                 end,
             },
             {
-                name     = ('sonar_farm:harvest:%s'):format(key),
+                name     = ('sonar_farm_publicjob:harvest:%s'):format(key),
                 label    = 'Harvest',
                 icon     = 'fa-solid fa-wheat-awn',
                 distance = distance,
@@ -146,7 +146,7 @@ local function createSphereZone(slot, key)
                 end,
             },
             {
-                name     = ('sonar_farm:fertilize:%s'):format(key),
+                name     = ('sonar_farm_publicjob:fertilize:%s'):format(key),
                 label    = 'Fertilize',
                 icon     = 'fa-solid fa-flask',
                 distance = distance,
@@ -162,7 +162,7 @@ local function createSphereZone(slot, key)
                 end,
             },
             {
-                name     = ('sonar_farm:weed:%s'):format(key),
+                name     = ('sonar_farm_publicjob:weed:%s'):format(key),
                 label    = 'Remove weeds',
                 icon     = 'fa-solid fa-leaf',
                 distance = distance,
@@ -178,7 +178,7 @@ local function createSphereZone(slot, key)
                 end,
             },
             {
-                name     = ('sonar_farm:treat-pests:%s'):format(key),
+                name     = ('sonar_farm_publicjob:treat-pests:%s'):format(key),
                 label    = 'Treat pests',
                 icon     = 'fa-solid fa-bug',
                 distance = distance,
@@ -238,7 +238,7 @@ function Slots.NearestEmpty(coords, radius)
 
     local best, bestDist
     local source = {}
-    if Config.Features.CompanyFieldAuthority then
+    if Config.Features.PublicFieldAuthority then
         for _, entry in pairs(registered) do if entry.slot then source[#source + 1] = entry.slot end end
     else source = Sonar.Zones.AllSlots() end
     for _, slot in ipairs(source) do
@@ -259,14 +259,14 @@ function Slots.RefreshProps()
         return
     end
 
-    if Config.Features.CompanyFieldAuthority then
+    if Config.Features.PublicFieldAuthority then
         for _, entry in pairs(registered) do if entry.slot then refreshProp(entry.slot) end end
     else for _, slot in ipairs(Sonar.Zones.AllSlots()) do refreshProp(slot) end end
 end
 
 --- Register one ox_target sphere per slot at resource start.
 function Slots.Register()
-    if Config.Features.CompanyFieldAuthority then return end
+    if Config.Features.PublicFieldAuthority then return end
     for _, slot in ipairs(Sonar.Zones.AllSlots()) do
         local key     = keyOf(slot.zone, slot.index)
         local propKey = propKeyOf(slot.zone, slot.index)
@@ -284,7 +284,7 @@ end
 
 --- Reconcile only the authoritative slots in the player's subscribed cells.
 function Slots.ReplaceFields(fields)
-    if not Config.Features.CompanyFieldAuthority then return end
+    if not Config.Features.PublicFieldAuthority then return end
     local wanted = {}
     for _, field in ipairs(fields or {}) do
         for _, slot in ipairs(field.slots or {}) do
@@ -306,7 +306,7 @@ function Slots.ReplaceFields(fields)
 end
 
 function Slots.ClearDynamic()
-    if not Config.Features.CompanyFieldAuthority then return end
+    if not Config.Features.PublicFieldAuthority then return end
     Slots.ReplaceFields({})
 end
 

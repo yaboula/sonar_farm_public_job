@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Runtime lifecycle gate (server)
+    sonar_farm_publicjob - Runtime lifecycle gate (server)
     No gameplay callback may mutate or expose state before boot is complete.
 ]]
 

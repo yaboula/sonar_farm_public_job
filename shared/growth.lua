@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Growth evaluator (shared)
+    sonar_farm_publicjob - Growth evaluator (shared)
     Pure, side-effect-free timestamp math. Given a crop record it derives the
     current progress and visual stage without mutating anything and without any
     tick. Callers evaluate lazily (on query / interaction / render).

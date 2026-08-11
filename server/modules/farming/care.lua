@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Care action (server)
+    sonar_farm_publicjob - Care action (server)
     Authoritative watering. Public care is allowed by default so a player can
     save a neighbour's withering crop; that grants no claim over the produce
     (see harvest.lua and Config.Farming.OwnerOnlyHarvest).
@@ -102,11 +102,11 @@ lib.callback.register(CALLBACKS.WATER, function(source, payload)
             protectionStrength = selected.effect.protectionStrength or 0,
         }
         Physiology.Water(record, waterEff, selected.definition)
-        Items.RecordCompanyUse(source, selected, ACTIONS.WATER, broken)
+        Items.RecordUse(source, selected, ACTIONS.WATER, broken)
 
         local updated = State.Get(record.id)
         Fields.RecordOperation(source, record, ACTIONS.WATER, fieldAccess,
-            { itemId = selected.definition.id, score = score, toolBroken = broken,
+            { itemId = selected.definition.id, score = score, toolBroken = broken, changed = true,
                 water = updated and updated.data.water or condition.water })
 
         Sync.OnCropChanged(updated or record)

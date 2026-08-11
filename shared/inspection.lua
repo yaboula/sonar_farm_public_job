@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Pure crop inspection snapshot
+    sonar_farm_publicjob - Pure crop inspection snapshot
 
     Produces the versioned domain payload consumed by the focus-free inspection
     NUI. Every value comes from the same shared Growth/Physiology/Conditions

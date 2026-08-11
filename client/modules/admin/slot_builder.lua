@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - In-Game Slot Builder (Admin Tool)
+    sonar_farm_publicjob - In-Game Slot Builder (Admin Tool)
     Point-by-point zone designer. Places individual slots by clicking on the ground.
 
     Generates the `slots` table for config/zones.lua — ideal for irregular fields,
@@ -128,7 +128,7 @@ end
 
 -- ─── Export ──────────────────────────────────────────────────────────────────
 
-local function SB_SaveDraft(zoneKey, label, allowedCrops, rowSizes, purchasePrice, starterEligible)
+local function SB_SaveDraft(zoneKey, label, allowedCrops, rowSizes, region, sizeClass)
     if #sbSlots == 0 then
         Bridge.Notify("No slots to export.", "error")
         return
@@ -176,8 +176,7 @@ local function SB_SaveDraft(zoneKey, label, allowedCrops, rowSizes, purchasePric
     end
     local response = lib.callback.await(Sonar.Constants.CALLBACKS.FIELD_DRAFT_SAVE, false, {
         id = zoneKey, legacyZone = zoneKey, name = label, location = label,
-        orientation = sbSlots[1].heading or 0, starterEligible = starterEligible == true,
-        starterPriority = 100, purchasePrice = tonumber(purchasePrice) or 0, catalogVisible = true,
+        orientation = sbSlots[1].heading or 0, region = region, sizeClass = sizeClass, catalogVisible = true,
         allowedCrops = allowedCrops or {}, access = { x = cx, y = cy, z = cz }, rows = rows,
         blip = { enabled = true, sprite = 496, color = 25, scale = 0.8 },
     })
@@ -210,8 +209,10 @@ local function SB_Finalize()
         { type = 'input',        label = 'Display Label', placeholder = 'e.g. West Vineyard', required = true },
         { type = 'multi-select', label = 'Allowed Crops (Empty = All)', options = cropOptions },
         { type = 'input', label = 'Row sizes (comma-separated)', placeholder = '8,8,8', required = true },
-        { type = 'number', label = 'Permanent Purchase Price', default = 40000, min = 0, required = true },
-        { type = 'checkbox', label = 'Eligible as Starter Field', checked = false },
+        { type = 'select', label = 'Region', default = 'Grapeseed', required = true,
+          options = { { value = 'Grapeseed', label = 'Grapeseed' }, { value = 'Paleto', label = 'Paleto' } } },
+        { type = 'select', label = 'Size', default = 'S', required = true,
+          options = { { value = 'S', label = 'S (24)' }, { value = 'M', label = 'M (40)' }, { value = 'L', label = 'L (64)' } } },
     })
 
     if not input or not input[1] or not input[2] then

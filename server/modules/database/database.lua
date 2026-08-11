@@ -1,13 +1,13 @@
 --[[
-    sonar_farm - Database layer (server)
+    sonar_farm_publicjob - Database layer (server)
     Thin, parameterized access over oxmysql (MySQL global from
     @oxmysql/lib/MySQL.lua). No business logic here: schema bootstrap plus
-    load/upsert/delete for farming_crops. Batched and chunked for safety.
+    load/upsert/delete for sfpj_crops. Batched and chunked for safety.
 ]]
 
 Database = Database or {}
 
-local CROPS_TABLE = 'farming_crops'
+local CROPS_TABLE = 'sfpj_crops'
 
 -- Column order shared by the upsert builder and the row serializer.
 local UPSERT_COLUMNS = {

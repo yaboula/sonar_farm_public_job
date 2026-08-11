@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Crop interaction (client)
+    sonar_farm_publicjob - Crop interaction (client)
     Exposes helper utilities and descriptors for crop target options.
     Slot sphere zones (in client/modules/zones/slots.lua) are the primary target
     entry-points for all slot interactions (Plant, Inspect, Water, Harvest).

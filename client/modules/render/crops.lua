@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Crop rendering (client)
+    sonar_farm_publicjob - Crop rendering (client)
     Owns the local crop cache and decides what is drawn. Growth and condition are
     NOT streamed from the server: they are derived here with the shared formulas
     (shared/growth.lua, shared/physiology.lua), so a field full of growing crops

@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Client bootstrap
+    sonar_farm_publicjob - Client bootstrap
     Initializes the Bridge on the client and waits for readiness. No visual or
     interaction logic yet (Stage 4+). This is the client-side smoke test.
 ]]

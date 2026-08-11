@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Shared clock
+    sonar_farm_publicjob - Shared clock
     Growth and physiology are pure functions of elapsed time, and from Stage 4 the
     client derives them locally to avoid streaming state over the network. That
     only works if both sides agree on "now".

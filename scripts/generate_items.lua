@@ -20,14 +20,16 @@ for _, item in ipairs(Sonar.ItemCatalog.items) do
     lines[#lines + 1] = ("        label = %s,"):format(quote(item.label))
     lines[#lines + 1] = ("        weight = %d,"):format(item.weight)
     lines[#lines + 1] = ("        stack = %s,"):format(tostring(item.stack))
-    lines[#lines + 1] = ("        close = %s,"):format(tostring(item.seed == true))
+    lines[#lines + 1] = ("        close = %s,"):format(tostring(item.seed == true or item.id == 'farm_tablet'))
     lines[#lines + 1] = ("        description = %s,"):format(quote(item.description))
-    if item.tool then
+    if item.tool or item.id == 'farm_tablet' then
         lines[#lines + 1] = '        consume = 0,'
     end
-    if item.seed then
+    if item.seed or item.id == 'farm_tablet' then
         lines[#lines + 1] = '        client = {'
-        lines[#lines + 1] = "            export = 'sonar_farm.useSeed',"
+        lines[#lines + 1] = item.seed
+            and "            export = 'sonar_farm_publicjob.useSeed',"
+            or "            export = 'sonar_farm_publicjob.openTablet',"
         lines[#lines + 1] = '        },'
     end
     lines[#lines + 1] = '    },'
@@ -70,16 +72,16 @@ local web = {
     '// Source: shared/item_catalog.lua',
     '// Run: lua scripts/generate_items.lua',
     '',
-    'import type { SupplyProduct } from "../types";',
+    'import type { MarketCatalogProduct } from "../types";',
     '',
-    'export const CANONICAL_SUPPLY_PRODUCTS: SupplyProduct[] = [',
+    'export const CANONICAL_MARKET_PRODUCTS: MarketCatalogProduct[] = [',
 }
 for _, item in ipairs(Sonar.ItemCatalog.market) do
     local stock = item.tier == 'plus' and '20' or item.tier == 'pro' and '10' or '"base"'
     local restock = item.tier == 'plus' and 'Restocks 5 every 30m'
         or item.tier == 'pro' and 'Restocks 2 every 60m' or 'Base supplier stock'
     local applications = item.tool and item.tool.uses or 1
-    web[#web + 1] = ('  { id: %s, name: %s, category: %s, cropRelation: %s, detail: %s, effect: %s, tier: %s, image: %s, unit: "unit", unitPrice: %d, stock: %s, restock: %s, personalOwned: 0, companyOwned: 0, leadMinutes: %d, applications: %d },')
+    web[#web + 1] = ('  { id: %s, label: %s, category: %s, cropRelation: %s, description: %s, effect: %s, tier: %s, image: %s, price: %d, stock: %s, restock: %s, leadMinutes: %d, applications: %d },')
         :format(quote(item.id), quote(item.label), quote(item.category), quote(item.cropRelation),
             quote(item.description), quote(effect(item)), quote(item.tier), quote('assets/items/' .. item.id .. '.png'),
             item.price, stock, quote(restock), item.leadMinutes, applications)

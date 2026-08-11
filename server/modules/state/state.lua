@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - State manager (server)
+    sonar_farm_publicjob - State manager (server)
     Authoritative in-memory hot state for crops. RAM is the source of truth
     during gameplay; the DB is an async backup. Writes are tracked with dirty /
     deleted sets and flushed in batches (snapshot swap, see State.Flush).

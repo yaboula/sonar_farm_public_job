@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Plant physiology mutators (server)
+    sonar_farm_publicjob - Plant physiology mutators (server)
     The evaluation itself is shared (see shared/physiology.lua) because the client
     predicts it for rendering. What lives here is everything that *writes*: only
     the server may change a crop's condition.

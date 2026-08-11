@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Advanced crop condition trajectories (shared, pure)
+    sonar_farm_publicjob - Advanced crop condition trajectories (shared, pure)
 
     Computes the raw condition path since data.lastCare. No mutation happens
     here: both client prediction and server settlement consume the same result.

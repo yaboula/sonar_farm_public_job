@@ -1,8 +1,7 @@
 --[[
-    sonar_farm - Bridge Layer (Module 1)
+    sonar_farm_publicjob - Bridge Layer (Module 1)
     Framework abstraction. The rest of the codebase talks ONLY to `Bridge.*`
-    and never to a framework object directly. This keeps QB-Core (MVP) swappable
-    for ESX / Qbox later without touching business logic.
+    and never to a framework object directly. Public Job v1 supports QB-Core.
 
     Load order (see fxmanifest): bridge.lua first, then framework adapters and
     the inventory/target wrappers register themselves into this registry.
@@ -27,7 +26,7 @@ local readyCallbacks = {}
 -- ---------------------------------------------------------------------------
 -- Internal logging (Bridge must not depend on the server-only Logger module).
 -- ---------------------------------------------------------------------------
-local PREFIX = '^5[sonar_farm]^7'
+local PREFIX = '^5[sonar_farm_publicjob]^7'
 
 --- Minimal internal print, safe on client and server.
 ---@param level 'info'|'warn'|'error'
@@ -99,7 +98,7 @@ function Bridge.Init()
     until name or attempts >= 100
 
     if not name then
-        Bridge.Log('error', 'No supported framework detected (qb-core / esx / qbox). Bridge halted.')
+        Bridge.Log('error', 'QB-Core was not detected. Bridge halted.')
         return false
     end
 
@@ -197,6 +196,22 @@ end
 --- [Server] Get a display name for a source.
 function Bridge.GetPlayerName(source)
     return callAdapter('GetPlayerName', source)
+end
+
+--- [Server] Return the current job name, grade and duty state.
+function Bridge.GetJobState(source)
+    return callAdapter('GetJobState', source)
+end
+
+--- [Server] Return the balance of a personal account.
+function Bridge.GetMoney(source, account)
+    return callAdapter('GetMoney', source, account)
+end
+
+--- [Server] Debit a personal account. Returns true only when the framework
+--- confirms the mutation.
+function Bridge.DebitMoney(source, account, amount, reason, operationId)
+    return callAdapter('DebitMoney', source, account, amount, reason, operationId)
 end
 
 --- [Server] Credit a framework account. `operationId` is forwarded for

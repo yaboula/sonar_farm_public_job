@@ -1,32 +1,64 @@
--- Canonical, version-controlled Field catalogue.
--- MySQL becomes authoritative after this catalogue is imported at boot.
+-- Version-controlled public Field catalogue. MySQL owns active revisions after import.
 
 Config.FieldSeeds = {
     {
-        id = 'grapeseed_east', legacyZone = 'grapeseed_east', name = 'East Fields',
-        location = 'Grapeseed · East service track', orientation = 0.0,
-        starterEligible = true, starterPriority = 10, purchasePrice = 45000,
-        catalogVisible = true, allowedCrops = {},
-        access = { x = 2236.0, y = 5031.0, z = 44.0 },
-        grid = { origin = { x = 2236.0, y = 5031.0, z = 44.2 }, rows = 5, cols = 8,
-            spacing = { x = 2.2, y = 2.8 }, heading = 0.0 },
-        blip = { enabled = true, sprite = 496, color = 25, scale = 0.8 },
-    },
-    {
         id = 'grapeseed_south', legacyZone = 'grapeseed_south', name = 'South Fields',
-        location = 'Grapeseed · South farm road', orientation = 0.0,
-        starterEligible = true, starterPriority = 20, purchasePrice = 38000,
-        catalogVisible = true, allowedCrops = { 'carrot', 'potato' },
+        location = 'Grapeseed · South farm road', region = 'Grapeseed', sizeClass = 'S',
+        orientation = 0.0, catalogVisible = true, allowedCrops = { 'carrot', 'potato' },
         access = { x = 2010.0, y = 4900.0, z = 41.0 },
         grid = { origin = { x = 2010.0, y = 4900.0, z = 41.2 }, rows = 4, cols = 6,
             spacing = { x = 2.2, y = 2.8 }, heading = 0.0 },
         blip = { enabled = true, sprite = 496, color = 25, scale = 0.8 },
     },
     {
+        id = 'grapeseed_east', legacyZone = 'grapeseed_east', name = 'East Fields',
+        location = 'Grapeseed · East service track', region = 'Grapeseed', sizeClass = 'M',
+        orientation = 0.0, catalogVisible = true, allowedCrops = {},
+        access = { x = 2236.0, y = 5031.0, z = 44.0 },
+        grid = { origin = { x = 2236.0, y = 5031.0, z = 44.2 }, rows = 5, cols = 8,
+            spacing = { x = 2.2, y = 2.8 }, heading = 0.0 },
+        blip = { enabled = true, sprite = 496, color = 25, scale = 0.8 },
+    },
+    {
+        id = 'grapeseed_north', legacyZone = 'grapeseed_north', name = 'North Acre',
+        location = 'Grapeseed · North irrigation road', region = 'Grapeseed', sizeClass = 'L',
+        orientation = 0.0, catalogVisible = true, allowedCrops = {},
+        access = { x = 2148.0, y = 5072.0, z = 46.0 },
+        grid = { origin = { x = 2148.0, y = 5072.0, z = 46.0 }, rows = 8, cols = 8,
+            spacing = { x = 2.2, y = 2.8 }, heading = 0.0 },
+        blip = { enabled = true, sprite = 496, color = 25, scale = 0.8 },
+    },
+    {
+        id = 'paleto_creek', legacyZone = 'paleto_creek', name = 'Creek Plot',
+        location = 'Paleto · Creek approach', region = 'Paleto', sizeClass = 'S',
+        orientation = 8.0, catalogVisible = true, allowedCrops = { 'lettuce', 'potato' },
+        access = { x = -108.0, y = 6208.0, z = 31.0 },
+        grid = { origin = { x = -108.0, y = 6208.0, z = 31.0 }, rows = 4, cols = 6,
+            spacing = { x = 2.2, y = 2.8 }, heading = 8.0 },
+        blip = { enabled = true, sprite = 496, color = 25, scale = 0.8 },
+    },
+    {
+        id = 'paleto_orchard', legacyZone = 'paleto_orchard', name = 'Orchard Rows',
+        location = 'Paleto · Old orchard road', region = 'Paleto', sizeClass = 'M',
+        orientation = 90.0, catalogVisible = true, allowedCrops = {},
+        access = { x = -162.0, y = 6170.0, z = 31.0 },
+        grid = { origin = { x = -162.0, y = 6170.0, z = 31.0 }, rows = 5, cols = 8,
+            spacing = { x = 2.2, y = 2.8 }, heading = 90.0 },
+        blip = { enabled = true, sprite = 496, color = 25, scale = 0.8 },
+    },
+    {
+        id = 'paleto_highland', legacyZone = 'paleto_highland', name = 'Highland Farm',
+        location = 'Paleto · Highland service lane', region = 'Paleto', sizeClass = 'L',
+        orientation = 90.0, catalogVisible = true, allowedCrops = {},
+        access = { x = -218.0, y = 6132.0, z = 31.0 },
+        grid = { origin = { x = -218.0, y = 6132.0, z = 31.0 }, rows = 8, cols = 8,
+            spacing = { x = 2.2, y = 2.8 }, heading = 90.0 },
+        blip = { enabled = true, sprite = 496, color = 25, scale = 0.8 },
+    },
+    {
         id = 'zone1', legacyZone = 'zone1', name = 'QA Tomato Field',
-        location = 'Grapeseed · Development plot', orientation = 109.5,
-        starterEligible = false, starterPriority = 999, purchasePrice = 0,
-        catalogVisible = false, allowedCrops = { 'tomato' },
+        location = 'Grapeseed · Development plot', region = 'QA', sizeClass = 'S',
+        orientation = 109.5, catalogVisible = false, allowedCrops = { 'tomato' },
         access = { x = 2055.71, y = 4954.00, z = 40.08 },
         rows = {
             { slots = {

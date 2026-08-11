@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Bridge adapter: QB-Core (MVP, full implementation)
+    sonar_farm_publicjob - Bridge adapter: QB-Core (MVP, full implementation)
     Registers itself into the Bridge registry. Implements server- and
     client-context methods, branching on IsDuplicityVersion().
 ]]
@@ -58,13 +58,43 @@ if IsDuplicityVersion() then
         return player.PlayerData.name or ('Player %s'):format(source)
     end
 
+    function adapter.GetJobState(source)
+        local player = QBCore.Functions.GetPlayer(source)
+        if not player then return nil end
+        local job = player.PlayerData.job or {}
+        local grade = job.grade
+        if type(grade) == 'table' then grade = grade.level or grade.grade or 0 end
+        return {
+            name = job.name,
+            label = job.label,
+            grade = tonumber(grade) or 0,
+            onDuty = job.onduty == true,
+        }
+    end
+
+    function adapter.GetMoney(source, account)
+        local player = QBCore.Functions.GetPlayer(source)
+        if not player then return nil end
+        return tonumber((player.PlayerData.money or {})[account or 'bank']) or 0
+    end
+
+    function adapter.DebitMoney(source, account, amount, reason, operationId)
+        local player = QBCore.Functions.GetPlayer(source)
+        if not player or not player.Functions or not player.Functions.RemoveMoney then return false end
+        local value = math.floor(tonumber(amount) or 0)
+        if value <= 0 then return false end
+        if adapter.GetMoney(source, account) < value then return false end
+        local auditReason = ('%s [%s]'):format(tostring(reason or 'Sonar Farm Public Job'), tostring(operationId or 'no-operation'))
+        return player.Functions.RemoveMoney(account or 'bank', value, auditReason) == true
+    end
+
     function adapter.CreditMoney(identifier, account, amount, reason, operationId)
         local player = QBCore.Functions.GetPlayerByCitizenId(identifier)
         if not player and QBCore.Functions.GetOfflinePlayerByCitizenId then
             player = QBCore.Functions.GetOfflinePlayerByCitizenId(identifier)
         end
         if not player or not player.Functions or not player.Functions.AddMoney then return false end
-        local auditReason = ('%s [%s]'):format(tostring(reason or 'Sonar Farm'), tostring(operationId or 'no-operation'))
+        local auditReason = ('%s [%s]'):format(tostring(reason or 'Sonar Farm Public Job'), tostring(operationId or 'no-operation'))
         return player.Functions.AddMoney(account or 'bank', tonumber(amount) or 0, auditReason) == true
     end
 

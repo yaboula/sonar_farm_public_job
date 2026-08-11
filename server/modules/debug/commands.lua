@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Debug commands (server)
+    sonar_farm_publicjob - Debug commands (server)
     Test harness for the Stage 2 state/persistence engine. Registered ONLY when
     Config.Debug is true. Not meant for production. No real gameplay here.
 ]]
@@ -124,3 +124,44 @@ RegisterCommand('farm_debug_clear', function(src)
 end, false)
 
 Logger.Info('Debug commands registered (/farm_debug_plant|dump|grow|save|clear).', 'debug')
+
+RegisterCommand('sfpj_reservation', function(src, args)
+    if not canRun(src) or not runtimeReady(src) then return end
+    local key = tostring(args[1] or '')
+    local row = MySQL.single.await([[SELECT * FROM sfpj_reservations WHERE id=? OR field_id=?
+        ORDER BY created_at DESC LIMIT 1]], { key, key })
+    reply(src, row and json.encode(Reservations.Snapshot(row.id)) or 'Reservation not found.')
+end, false)
+
+RegisterCommand('sfpj_release', function(src, args)
+    if not canRun(src) or not runtimeReady(src) then return end
+    local key = tostring(args[1] or '')
+    local row = MySQL.single.await([[SELECT id FROM sfpj_reservations WHERE (id=? OR field_id=?)
+        AND status IN ('active','grace') LIMIT 1]], { key, key })
+    reply(src, row and (Reservations.Purge(row.id, 'admin_release') and 'Reservation released.' or 'Release failed.')
+        or 'Active reservation not found.')
+end, false)
+
+RegisterCommand('sfpj_setxp', function(src, args)
+    if not canRun(src) or not runtimeReady(src) then return end
+    local identifier, xp = tostring(args[1] or ''), tonumber(args[2])
+    if identifier == '' or not xp then return reply(src, 'Usage: /sfpj_setxp <citizenid> <xp>') end
+    local result = Progression.Set(identifier, xp, 'admin:' .. Sonar.Utils.Uuid())
+    reply(src, ('XP set: %s is level %d with %d XP.'):format(identifier, result.level, result.xp))
+end, false)
+
+RegisterCommand('sfpj_reconcile', function(src)
+    if not canRun(src) or not runtimeReady(src) then return end
+    Sell.Reconcile(); reply(src, 'Economy reconciliation pass completed.')
+end, false)
+
+RegisterCommand('sfpj_activate_field', function(src, args)
+    if not canRun(src) or not runtimeReady(src) then return end
+    if not Admin.IsFieldAuthorized(src) then return reply(src, 'Permission denied. Required Field ACE: ' .. Config.Fields.Ace) end
+    local fieldId, revisionId = tostring(args[1] or ''), tostring(args[2] or '')
+    if fieldId == '' or revisionId == '' then
+        return reply(src, 'Usage: /sfpj_activate_field <field-id> <revision-id>')
+    end
+    local ok, reason = Fields.ActivateRevision(fieldId, revisionId)
+    reply(src, ok and 'Field revision activated.' or ('Activation rejected: ' .. tostring(reason)))
+end, false)

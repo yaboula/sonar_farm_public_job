@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Tomato Initial Planting scoring (server-pure)
+    sonar_farm_publicjob - Tomato Initial Planting scoring (server-pure)
 
     The NUI sends bounded, normalized interaction samples. This module validates
     and recomputes the four outcomes from those samples; client summaries and

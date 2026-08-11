@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - Rate limiter (server)
+    sonar_farm_publicjob - Rate limiter (server)
     Token bucket per player against event flooding. Tickless: the bucket refills
     lazily from elapsed time on each consume, so idle players cost nothing.
 

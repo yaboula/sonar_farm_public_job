@@ -1,5 +1,5 @@
 --[[
-    sonar_farm - In-Game Zone Builder (Admin Tool)
+    sonar_farm_publicjob - In-Game Zone Builder (Admin Tool)
     Premium UX visualizer for creating grid zones in real-time.
 ]]
 
@@ -100,7 +100,7 @@ local function showInstructions()
     end
 end
 
-local function saveFieldDraft(zoneKey, label, allowedCrops, purchasePrice, starterEligible)
+local function saveFieldDraft(zoneKey, label, allowedCrops, region, sizeClass)
     local cropsStr = ""
     if allowedCrops and #allowedCrops > 0 then
         local parts = {}
@@ -138,8 +138,7 @@ local function saveFieldDraft(zoneKey, label, allowedCrops, purchasePrice, start
     print(output)
     local response = lib.callback.await(Sonar.Constants.CALLBACKS.FIELD_DRAFT_SAVE, false, {
         id = zoneKey, legacyZone = zoneKey, name = label, location = label,
-        orientation = grid.heading, starterEligible = starterEligible == true,
-        starterPriority = 100, purchasePrice = tonumber(purchasePrice) or 0, catalogVisible = true,
+        orientation = grid.heading, region = region, sizeClass = sizeClass, catalogVisible = true,
         allowedCrops = allowedCrops or {}, access = { x = grid.origin.x, y = grid.origin.y, z = grid.origin.z },
         grid = { origin = { x = grid.origin.x, y = grid.origin.y, z = grid.origin.z },
             rows = grid.rows, cols = grid.cols, spacing = { x = grid.spacing.x, y = grid.spacing.y }, heading = grid.heading },
@@ -166,8 +165,10 @@ local function finalizeZone()
         { type = 'input', label = 'Zone Key', placeholder = 'e.g. grapeseed_new', required = true },
         { type = 'input', label = 'Display Label', placeholder = 'e.g. Grapeseed Fields', required = true },
         { type = 'multi-select', label = 'Allowed Crops (Empty = All)', options = cropOptions },
-        { type = 'number', label = 'Permanent Purchase Price', default = 40000, min = 0, required = true },
-        { type = 'checkbox', label = 'Eligible as Starter Field', checked = false },
+        { type = 'select', label = 'Region', default = 'Grapeseed', required = true,
+          options = { { value = 'Grapeseed', label = 'Grapeseed' }, { value = 'Paleto', label = 'Paleto' } } },
+        { type = 'select', label = 'Size', default = 'S', required = true,
+          options = { { value = 'S', label = 'S (24)' }, { value = 'M', label = 'M (40)' }, { value = 'L', label = 'L (64)' } } },
     })
 
     if not input or not input[1] or not input[2] then
