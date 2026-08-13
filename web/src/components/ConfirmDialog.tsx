@@ -6,12 +6,13 @@ interface Props extends PropsWithChildren {
   title: string;
   confirmLabel: string;
   pending?: boolean;
+  confirmDisabled?: boolean;
   tone?: "confirm" | "danger-confirm";
   onClose: () => void;
   onConfirm: () => void;
 }
 
-export function ConfirmDialog({ eyebrow, title, confirmLabel, pending, tone = "confirm", onClose, onConfirm, children }: Props) {
+export function ConfirmDialog({ eyebrow, title, confirmLabel, pending, confirmDisabled, tone = "confirm", onClose, onConfirm, children }: Props) {
   const titleId = useId();
   const descriptionId = useId();
   const dialogRef = useRef<HTMLElement>(null);
@@ -44,7 +45,7 @@ export function ConfirmDialog({ eyebrow, title, confirmLabel, pending, tone = "c
         <button className="dialog-close" type="button" aria-label="Close" disabled={pending} onClick={onClose}><X size={20} /></button>
         <span>{eyebrow}</span><h2 id={titleId}>{title}</h2>
         <div className="dialog-content" id={descriptionId}>{children}</div>
-        <div className="dialog-actions"><button ref={cancelRef} type="button" className="secondary-button" disabled={pending} onClick={onClose}>Cancel</button><button type="button" className={tone} disabled={pending} onClick={onConfirm}>{pending ? "Processing..." : confirmLabel}</button></div>
+        <div className="dialog-actions"><button ref={cancelRef} type="button" className="secondary-button" disabled={pending} onClick={onClose}>Cancel</button><button type="button" className={tone} disabled={pending || confirmDisabled} onClick={onConfirm}>{pending ? "Processing..." : confirmLabel}</button></div>
       </section>
     </div>
   );

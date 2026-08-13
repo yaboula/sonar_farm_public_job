@@ -58,10 +58,25 @@ end
 
 local function today(source, actor)
     local progress, reservation = Progression.Get(actor.identifier), Reservations.GetForPlayer(actor.identifier)
-    local ownCrops = 0
-    for _, crop in pairs(State.crops or {}) do if crop.owner == actor.identifier then ownCrops = ownCrops + 1 end end
+    local ownCrops, cropSummary = 0, { ready = 0, needsAttention = 0, growing = 0 }
+    for _, crop in pairs(State.crops or {}) do
+        if crop.owner == actor.identifier then
+            ownCrops = ownCrops + 1
+            local current = Physiology.Evaluate(crop, Sonar.Time.Now())
+            if current.state == Sonar.Constants.CROP_STATE.DEAD
+                or (tonumber(current.health) or 100) < 60
+                or (tonumber(current.water) or 100) < 35 then
+                cropSummary.needsAttention = cropSummary.needsAttention + 1
+            elseif (tonumber(current.progress) or 0) >= 1 then
+                cropSummary.ready = cropSummary.ready + 1
+            else
+                cropSummary.growing = cropSummary.growing + 1
+            end
+        end
+    end
     local market, sell = Market.Load(source), Sell.Load(source)
     return { progression = progress, reservation = reservation, ownCrops = ownCrops,
+        ownCropSummary = cropSummary,
         marketStock = market and market.stock or {}, sellableGroups = sell and sell.groups or {},
         nextUnlock = progress.level < 4 and { level = 4, label = 'Plus products' }
             or progress.level < 5 and { level = 5, label = 'Medium Fields' }

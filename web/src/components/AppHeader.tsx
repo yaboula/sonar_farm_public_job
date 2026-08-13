@@ -1,7 +1,9 @@
 import { Plant } from "@phosphor-icons/react";
+import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useHub } from "../store/HubContext";
 import type { HubRoute } from "../types";
+import { ProgressionDialog } from "./ProgressionDialog";
 
 const NAVIGATION: Array<{ id: HubRoute; label: string }> = [
   { id: "today", label: "Today" },
@@ -12,6 +14,7 @@ const NAVIGATION: Array<{ id: HubRoute; label: string }> = [
 
 export function AppHeader() {
   const hub = useHub();
+  const [progressionOpen, setProgressionOpen] = useState(false);
   const levelSpan = Math.max(1, hub.progression.nextLevelXp - hub.progression.levelStartXp);
   const progress = hub.progression.level >= hub.progression.maxLevel
     ? 100
@@ -37,13 +40,14 @@ export function AppHeader() {
           </NavLink>
         ))}
       </nav>
-      <div className="player-progress" aria-label={`Level ${hub.progression.level}, ${hub.progression.xp} XP`}>
+      <button type="button" className="player-progress" aria-label={`Level ${hub.progression.level}, ${hub.progression.xp} XP. Open progression details`} onClick={() => setProgressionOpen(true)}>
         <div className="player-progress-copy">
           <span>LVL {hub.progression.level}</span>
           <strong>{hub.actorName ?? "Farmer"}</strong>
         </div>
         <div className="header-xp-track"><i style={{ width: `${progress}%` }} /></div>
-      </div>
+      </button>
+      {progressionOpen ? <ProgressionDialog progression={hub.progression} onClose={() => setProgressionOpen(false)} /> : null}
     </header>
   );
 }

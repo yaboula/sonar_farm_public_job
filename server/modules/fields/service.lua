@@ -338,7 +338,8 @@ function Fields.LoadOverview(source)
         end
     end
     table.sort(rows, function(a, b) return a.region == b.region and a.sizeClass < b.sizeClass or a.region < b.region end)
-    return { fields = rows, reservation = reservation, progression = progression }
+    return { fields = rows, reservation = reservation, progression = progression,
+        bankBalance = tonumber(Bridge.GetMoney(source, 'bank')) or 0 }
 end
 
 function Fields.LoadDetail(source, fieldId)
@@ -349,13 +350,22 @@ function Fields.LoadDetail(source, fieldId)
     local claim = Reservations.GetByField(field.id)
     local ownReservation = overview.reservation and claim and overview.reservation.id == claim.id
         and overview.reservation or nil
+    local rentPlans = Reservations.PricePlans(field.sizeClass, overview.progression.level,
+        ownReservation and ownReservation.status == 'grace')
+    local timestamp = Sonar.Time.Now()
+    local extensionBase = ownReservation and math.max(timestamp, tonumber(ownReservation.expiresAt) or timestamp)
+        or timestamp
+    for _, plan in ipairs(rentPlans) do
+        plan.resultingExpiresAt = extensionBase + Config.Reservations.Plans[plan.hours]
+        plan.available = not ownReservation
+            or plan.resultingExpiresAt <= timestamp + Config.Reservations.MaximumRemainingSeconds
+    end
     return { field = { id = field.id, name = field.name, location = field.location, region = field.region,
         sizeClass = field.sizeClass, access = field.access, rows = field.rows, slots = field.slots,
         slotCount = #field.slots, requiredLevel = Config.Progression.FieldSizeLevels[field.sizeClass] or 1,
         allowedCrops = field.allowedCrops, available = claim == nil,
         expiresAt = claim and tonumber(claim.expires_at) or nil }, reservation = overview.reservation,
-        progression = overview.progression, rentPlans = Reservations.PricePlans(field.sizeClass,
-            overview.progression.level, ownReservation and ownReservation.status == 'grace') }
+        progression = overview.progression, rentPlans = rentPlans, bankBalance = overview.bankBalance }
 end
 
 function Fields.BroadcastInvalidate(fieldId, reason)

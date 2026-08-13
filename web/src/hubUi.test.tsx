@@ -27,7 +27,7 @@ describe("public-job Hub visual contract", () => {
     await screen.findByRole("heading", { name: "Today" });
     const navigation = screen.getByRole("navigation", { name: "Primary navigation" });
     expect(within(navigation).getAllByRole("link").map((link) => link.textContent)).toEqual(["Today", "Fields", "Market", "Sell"]);
-    expect(screen.getByLabelText("Level 5, 4380 XP")).toBeVisible();
+    expect(screen.getByRole("button", { name: /Level 5, 4380 XP/ })).toBeVisible();
     expect(screen.queryByText("Company")).not.toBeInTheDocument();
     expect(screen.queryByText("Warehouse")).not.toBeInTheDocument();
   });
@@ -76,16 +76,65 @@ describe("public-job Hub visual contract", () => {
     expect(screen.getByRole("button", { name: "Add Farmer Tablet" })).toBeEnabled();
   });
 
-  it("preserves Field privacy and opens authoritative topology plus extension review", async () => {
+  it("distinguishes the player's Field, preserves others' privacy and opens an exact extension review", async () => {
     const user = userEvent.setup();
     renderHub("/fields");
     await screen.findByRole("heading", { name: "Fields" });
-    expect(screen.getByText("Holder identity remains private.")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Open Field Details" }));
+    expect(screen.getByText("Your active Field")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /East Fields/ }));
+    expect(screen.getByText(/Holder identity remains private/)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /South Fields/ }));
+    await user.click(screen.getByRole("button", { name: "Manage Your Field" }));
     await screen.findByRole("heading", { name: "South Fields" });
     expect(screen.getByRole("region", { name: "South Fields topology" })).toBeVisible();
     await user.click(screen.getByRole("button", { name: /6 hours/ }));
-    expect(screen.getByRole("dialog", { name: "Extend for 6 hours?" })).toBeVisible();
+    const dialog = screen.getByRole("dialog", { name: "Extend for 6 hours?" });
+    expect(dialog).toBeVisible();
+    expect(within(dialog).getByText("New expiry")).toBeVisible();
+    expect(within(dialog).getByText("Bank after")).toBeVisible();
+  });
+
+  it("opens a global progression inspector with every milestone", async () => {
+    const user = userEvent.setup();
+    renderHub("/today");
+    await screen.findByRole("heading", { name: "Today" });
+    await user.click(screen.getByRole("button", { name: /Open progression details/ }));
+    const dialog = screen.getByRole("dialog", { name: "Farmer level 5" });
+    expect(within(dialog).getByText("Plus equipment")).toBeVisible();
+    expect(within(dialog).getByText("Master farmer")).toBeVisible();
+  });
+
+  it("shows the grace deadline and makes extension the primary recovery action", async () => {
+    window.history.replaceState({}, "", "/?reservation=grace");
+    renderHub("/today");
+    await screen.findByRole("heading", { name: "Today" });
+    expect(screen.getByText("grace")).toBeVisible();
+    expect(screen.getByText(/Grace ends/)).toBeVisible();
+    expect(screen.getByRole("button", { name: /Extend During Grace/ })).toBeVisible();
+  });
+
+  it("renders a first topology row immediately and disables extensions past the 24-hour cap", async () => {
+    renderHub("/fields/grapeseed_south");
+    await screen.findByRole("heading", { name: "South Fields" });
+    expect(screen.getByText("6 visible slots")).toBeVisible();
+    expect(screen.getByRole("button", { name: /24 hours/ })).toBeDisabled();
+    expect(screen.getByText("Allowed crops")).toBeVisible();
+  });
+
+  it("exposes personal bank context before Market and Sell confirmations", async () => {
+    const user = userEvent.setup();
+    const marketView = renderHub("/market");
+    await screen.findByRole("heading", { name: "Market" });
+    expect(screen.getByText("Available $24,860")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Add Carrot Seeds" }));
+    await user.click(screen.getByRole("button", { name: "Review Purchase" }));
+    expect(within(screen.getByRole("dialog")).getByText("Bank after")).toBeVisible();
+    marketView.unmount();
+
+    window.history.replaceState({}, "", "/?surface=sell");
+    renderHub("/sell");
+    await screen.findByRole("heading", { name: "Sell" });
+    expect(screen.getByText("$24,860")).toBeVisible();
   });
 
   it("keeps extension owner-only and blocks a second simultaneous Field", async () => {

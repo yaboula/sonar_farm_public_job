@@ -37,6 +37,8 @@ export interface RentPlan {
   basePrice: number;
   price: number;
   graceSurcharge: boolean;
+  available?: boolean;
+  resultingExpiresAt?: number;
 }
 
 export interface PublicFieldRow {
@@ -113,6 +115,7 @@ export interface TodayData {
   progression: Progression;
   reservation?: Reservation;
   ownCrops: number;
+  ownCropSummary?: { ready: number; needsAttention: number; growing: number };
   marketStock: Record<string, number>;
   sellableGroups: SellGroup[];
   nextUnlock?: { level: number; label: string };
@@ -122,6 +125,7 @@ export interface FieldsData {
   fields: PublicField[];
   reservation?: Reservation;
   progression: Progression;
+  bankBalance: number;
 }
 
 export interface FieldDetailData {
@@ -129,18 +133,21 @@ export interface FieldDetailData {
   reservation?: Reservation;
   progression: Progression;
   rentPlans: RentPlan[];
+  bankBalance: number;
 }
 
 export interface MarketData {
   products: MarketProduct[];
   stock: Record<string, number>;
   progression: Progression;
+  bankBalance: number;
 }
 
 export interface SellData {
   groups: SellGroup[];
   sellBonus: number;
   progression: Progression;
+  bankBalance: number;
 }
 
 export interface HubContextModel {

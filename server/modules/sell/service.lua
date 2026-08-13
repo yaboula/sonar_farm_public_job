@@ -55,7 +55,8 @@ function Sell.Load(source)
         unitPrice = math.floor(Config.Sell.BasePrices[group.cropType] * Config.Sell.TierMultipliers[group.tier]
             * (1 + progress.sellBonus) + 0.5) } end
     table.sort(output, function(a, b) return a.key < b.key end)
-    return { groups = output, sellBonus = progress.sellBonus, progression = progress }
+    return { groups = output, sellBonus = progress.sellBonus, progression = progress,
+        bankBalance = tonumber(Bridge.GetMoney(source, 'bank')) or 0 }
 end
 
 function Sell.Preview(source, selections, sellAll)

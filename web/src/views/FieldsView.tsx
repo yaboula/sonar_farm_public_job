@@ -1,11 +1,12 @@
 import { ArrowRight, CheckCircle, Clock, Funnel, LockKey, MagnifyingGlass, MapPin, Plant } from "@phosphor-icons/react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FarmSelect } from "../components/FarmSelect";
 import { HubScaffold } from "../components/HubScaffold";
 import { StatePanel } from "../components/StatePanel";
 import { useHubView } from "../hooks/useHubView";
-import type { FieldsData, PublicField } from "../types";
+import type { FieldsData, PublicField, Reservation } from "../types";
+import { formatDateTime, formatRemaining } from "../utils/format";
 
 const regionOptions = ["All", "Grapeseed", "Paleto"].map((value) => ({ value, label: value === "All" ? "All regions" : value }));
 const statusOptions = [{ value: "all", label: "All Fields" }, { value: "available", label: "Available" }, { value: "reserved", label: "Reserved" }];
@@ -17,6 +18,11 @@ export function FieldsView() {
   const [status, setStatus] = useState("all");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string>();
+  const [clock, setClock] = useState(() => Math.floor(Date.now() / 1000));
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(Math.floor(Date.now() / 1000)), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const data = view.data;
   const fields = useMemo(() => (data?.fields ?? []).filter((field) => {
     if (region !== "All" && field.region !== region) return false;
@@ -30,23 +36,31 @@ export function FieldsView() {
   if (!data) return <StatePanel state="empty" />;
 
   const toolbar = <><div className="hub-tabs" aria-label="Field availability"><Funnel size={17} />{statusOptions.map((option) => <button type="button" className={status === option.value ? "is-selected" : ""} key={option.value} onClick={() => setStatus(option.value)}>{option.label}</button>)}</div><label className="search-control"><MagnifyingGlass size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Fields" /></label><FarmSelect label="Region" value={region} options={regionOptions} onChange={setRegion} /></>;
-  const aside = selected ? <FieldInspector field={selected} level={data.progression.level} onOpen={() => navigate(`/fields/${selected.id}`)} /> : undefined;
+  const aside = selected ? <FieldInspector field={selected} level={data.progression.level} reservation={data.reservation} now={clock} onOpen={() => navigate(`/fields/${selected.id}`)} /> : undefined;
 
   return <HubScaffold eyebrow="Public land rental" title="Fields" subtitle="Reserve one complete Field and farm only inside its authoritative topology." toolbar={toolbar} aside={aside}>
     <div className="fields-landing"><div><MapPin size={25} /><span><small>Your access</small><strong>{data.reservation ? data.reservation.fieldId.replaceAll("_", " ") : "No active reservation"}</strong></span></div><div><span>Level discount</span><strong>{Math.round(data.progression.rentDiscount * 100)}%</strong></div><div><span>Participation rule</span><strong>One Field at a time</strong></div></div>
     <div className="public-field-grid">{fields.length ? fields.map((field) => {
       const locked = data.progression.level < field.requiredLevel;
-      return <button type="button" key={field.id} className={`public-field-card${selected?.id === field.id ? " is-selected" : ""}${!field.available ? " is-reserved" : ""}`} onClick={() => setSelectedId(field.id)} onDoubleClick={() => navigate(`/fields/${field.id}`)}>
-        <div className="field-card-top"><span className="field-size">{field.sizeClass}{field.slotCount}</span><span className={`field-availability ${field.available ? "available" : "reserved"}`}>{field.available ? <CheckCircle size={15} /> : <Clock size={15} />}{field.available ? "Available" : "Reserved"}</span></div>
+      const isMine = data.reservation?.fieldId === field.id;
+      const availabilityLabel = isMine ? "Your Field" : field.available ? "Available" : `In ${formatRemaining(field.expiresAt, clock)}`;
+      return <button type="button" key={field.id} className={`public-field-card${selected?.id === field.id ? " is-selected" : ""}${!field.available ? " is-reserved" : ""}${isMine ? " is-mine" : ""}`} onClick={() => setSelectedId(field.id)} onDoubleClick={() => navigate(`/fields/${field.id}`)}>
+        <div className="field-card-top"><span className="field-size">{field.sizeClass}{field.slotCount}</span><span className={`field-availability ${isMine ? "mine" : field.available ? "available" : "reserved"}`}>{isMine || field.available ? <CheckCircle size={15} /> : <Clock size={15} />}{availabilityLabel}</span></div>
         <div className="field-card-title"><Plant size={31} weight="thin" /><div><h2>{field.name}</h2><p>{field.location}</p></div></div>
         <div className="field-card-rule" />
-        <div className="field-card-meta"><span>{locked ? <><LockKey size={15} />Level {field.requiredLevel}</> : `${field.slotCount} planting slots`}</span><strong>From ${field.rentPlans[0]?.price.toLocaleString()}</strong></div>
+        <div className="field-card-meta"><span>{locked ? <><LockKey size={15} />Level {field.requiredLevel}</> : isMine ? `${data.reservation?.ownCrops ?? 0} of your crops` : `${field.slotCount} planting slots`}</span><strong>{isMine ? formatRemaining(data.reservation?.status === "grace" ? data.reservation.graceUntil : data.reservation?.expiresAt, clock) : `From $${field.rentPlans[0]?.price.toLocaleString()}`}</strong></div>
       </button>;
     }) : <div className="inline-empty">No public Fields match these filters.</div>}</div>
   </HubScaffold>;
 }
 
-function FieldInspector({ field, level, onOpen }: { field: PublicField; level: number; onOpen: () => void }) {
+function FieldInspector({ field, level, reservation, now, onOpen }: { field: PublicField; level: number; reservation?: Reservation; now: number; onOpen: () => void }) {
   const locked = level < field.requiredLevel;
-  return <div className="detail-inspector field-inspector"><span className="inspector-kicker">Selected Field</span><MapPin size={38} weight="thin" /><h2>{field.name}</h2><p>{field.location}</p><div className="inspector-rule" /><dl><div><dt>Region</dt><dd>{field.region}</dd></div><div><dt>Size</dt><dd>{field.sizeClass} · {field.slotCount} slots</dd></div><div><dt>Status</dt><dd>{field.available ? "Available" : "Reserved"}</dd></div><div><dt>Required level</dt><dd>{field.requiredLevel}</dd></div></dl><div className={`physical-note ${locked ? "is-warning" : ""}`}>{locked ? <LockKey size={18} /> : <CheckCircle size={18} />}<span>{locked ? `Reach level ${field.requiredLevel} to rent this Field.` : field.available ? "You can review rental plans now." : "Holder identity remains private."}</span></div><button className="inspector-action" type="button" onClick={onOpen}>Open Field Details<ArrowRight size={18} /></button></div>;
+  const isMine = reservation?.fieldId === field.id;
+  const note = locked ? `Reach level ${field.requiredLevel} to rent this Field.`
+    : isMine ? `Your ${reservation.status} reservation ends ${formatDateTime(reservation.status === "grace" ? reservation.graceUntil : reservation.expiresAt)}.`
+      : field.available ? "You can review discounted rental plans now."
+        : `Available in about ${formatRemaining(field.expiresAt, now)}. Holder identity remains private.`;
+  const cta = isMine ? "Manage Your Field" : field.available ? "Review Rental" : "View Availability";
+  return <div className="detail-inspector field-inspector"><span className="inspector-kicker">{isMine ? "Your active Field" : "Selected Field"}</span><MapPin size={38} weight="thin" /><h2>{field.name}</h2><p>{field.location}</p><div className="inspector-rule" /><dl><div><dt>Region</dt><dd>{field.region}</dd></div><div><dt>Size</dt><dd>{field.sizeClass} · {field.slotCount} slots</dd></div><div><dt>Status</dt><dd>{isMine ? `Your ${reservation.status} reservation` : field.available ? "Available" : "Reserved"}</dd></div><div><dt>Required level</dt><dd>{field.requiredLevel}</dd></div></dl><div className={`physical-note ${locked ? "is-warning" : ""}`}>{locked ? <LockKey size={18} /> : <CheckCircle size={18} />}<span>{note}</span></div><button className="inspector-action" type="button" onClick={onOpen}>{cta}<ArrowRight size={18} /></button></div>;
 }

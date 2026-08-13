@@ -79,7 +79,8 @@ function Market.Load(source)
     products[#products + 1] = { id = Config.Market.TabletItem, label = 'Farmer Tablet', category = 'Access',
         tier = 'basic', price = Config.Market.TabletPrice, stock = nil, requiredLevel = 1,
         unlocked = true, physicalOnly = true, owned = Bridge.Inventory.HasItem(source, Config.Market.TabletItem, 1) }
-    return { products = products, stock = stocks, progression = progress }
+    return { products = products, stock = stocks, progression = progress,
+        bankBalance = tonumber(Bridge.GetMoney(source, 'bank')) or 0 }
 end
 
 local function normalizeLines(lines, allowTablet)

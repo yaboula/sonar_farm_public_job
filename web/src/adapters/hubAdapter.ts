@@ -49,16 +49,17 @@ function detailedField(field: PublicField): PublicFieldDetail {
   return { ...field, rows, slots, allowedCrops: ["carrot", "potato", "lettuce", "tomato"], access: { x: 2440.2, y: 4975.4, z: 46.8 } };
 }
 
-const fields: FieldsData = { progression, reservation, fields: fieldSeed };
+const bankBalance = 24_860;
+const fields: FieldsData = { progression, reservation, fields: fieldSeed, bankBalance };
 const market: MarketData = {
-  progression, stock: { plus: 16, pro: 7 },
+  progression, stock: { plus: 16, pro: 7 }, bankBalance,
   products: [
     ...CANONICAL_MARKET_PRODUCTS.map((item) => ({ id: item.id, label: item.label, description: item.description, category: item.category, tier: item.tier, price: item.price, stock: item.tier === "basic" ? undefined : item.tier === "plus" ? 16 : 7, requiredLevel: item.tier === "basic" ? 1 : item.tier === "plus" ? 4 : 8, unlocked: item.tier !== "pro" })),
     { id: "farm_tablet", label: "Farmer Tablet", description: "Opens the complete public farming Hub remotely.", category: "Access", tier: "basic", price: 1500, requiredLevel: 1, unlocked: true, physicalOnly: true, owned: false },
   ],
 };
 const sell: SellData = {
-  progression, sellBonus: 0.03,
+  progression, sellBonus: 0.03, bankBalance,
   groups: [
     { key: "carrot:poor", cropType: "carrot", itemId: "carrot", tier: "poor", quantity: 8, unitPrice: 6, basePrice: 12, multiplier: 0.5 },
     { key: "potato:standard", cropType: "potato", itemId: "potato", tier: "standard", quantity: 14, unitPrice: 10, basePrice: 10, multiplier: 1 },
@@ -68,6 +69,7 @@ const sell: SellData = {
 };
 const today: TodayData = {
   progression, reservation, ownCrops: reservation.ownCrops, marketStock: market.stock, sellableGroups: sell.groups,
+  ownCropSummary: { ready: 4, needsAttention: 2, growing: 6 },
   nextUnlock: { level: 8, label: "Pro products" },
 };
 
@@ -81,11 +83,13 @@ function previewSurface(): HubSurface {
   return candidate === "market" || candidate === "sell" ? candidate : "tablet";
 }
 
-function detailReservation(selected: PublicField): Reservation | undefined {
+function detailReservation(_selected: PublicField): Reservation | undefined {
   const mode = new URLSearchParams(window.location.search).get("participation");
   if (mode === "none") return undefined;
-  if (mode === "guest" && selected.id === reservation.fieldId) return { ...reservation, isOwner: false };
-  return reservation;
+  const reservationMode = new URLSearchParams(window.location.search).get("reservation");
+  const current = reservationMode === "grace" ? { ...reservation, status: "grace" as const, graceUntil: Math.floor(Date.now() / 1000) + 780 } : reservation;
+  if (mode === "guest") return { ...current, isOwner: false };
+  return current;
 }
 
 class FixtureAdapter implements HubAdapter {
@@ -103,11 +107,17 @@ class FixtureAdapter implements HubAdapter {
     const state = previewState();
     if (state !== "ready") return { request: { kind, route, fieldId }, state };
     const selected = fieldSeed.find((field) => field.id === fieldId) ?? fieldSeed[0];
-    const detail: FieldDetailData = { field: detailedField(selected), reservation: detailReservation(selected), progression, rentPlans: selected.rentPlans };
+    const detailReservationValue = detailReservation(selected);
+    const now = Math.floor(Date.now() / 1000);
+    const expiryBase = detailReservationValue?.fieldId === selected.id ? Math.max(now, detailReservationValue.expiresAt) : now;
+    const detailPlans = selected.rentPlans.map((item) => ({ ...item, resultingExpiresAt: expiryBase + item.hours * 3600, available: expiryBase + item.hours * 3600 <= now + 24 * 3600 }));
+    const detail: FieldDetailData = { field: detailedField(selected), reservation: detailReservationValue, progression, rentPlans: detailPlans, bankBalance };
+    const currentFields = { ...fields, reservation: detailReservation(fieldSeed[0]) };
+    const currentToday = { ...today, reservation: currentFields.reservation, ownCrops: currentFields.reservation?.ownCrops ?? 0 };
     const data = kind === "inviteCandidates" ? [{ source: 21, name: "Jamie Crops" }, { source: 36, name: "Robin Acre" }]
       : kind === "fieldDetail" ? detail
-      : route === "today" ? today
-      : route === "fields" || kind === "fieldsOverview" ? fields
+      : route === "today" ? currentToday
+      : route === "fields" || kind === "fieldsOverview" ? currentFields
       : route === "market" ? market
       : sell;
     return { request: { kind, route, fieldId }, state: "ready", data: data as T };
