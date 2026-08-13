@@ -2,7 +2,7 @@
 
 Date: 2026-08-13  
 Branch: `codex/publicjob-v1`  
-Scope: Today, Fields, Field Detail, Market and Sell after release-readiness hardening
+Scope: Today, Fields, Field Detail, Market and Sell after the complete Hub UX audit
 
 ## Sources of truth
 
@@ -49,6 +49,17 @@ The full-view comparison verifies composition, frame, header geometry, navigatio
 
 Integrated Browser checks passed for navigation, Market quantity selection, purchase review, dialog focus containment, Escape closing only the confirmation, owner-only extension, existing-participation blocking and physical Sell rendering. The Browser console contained no warnings or errors.
 
+The final UX audit added and verified:
+
+1. A global progression inspector with every unlock and the exact XP remaining.
+2. Exact rental/grace deadlines, own-Field identification, private availability countdowns and direct routing.
+3. Immediately visible topology slots, allowed-crop context, 24-hour-cap gating and exact post-extension expiry.
+4. Personal bank before/after previews for rental, Market and Sell, with proactive insufficient-funds blocking.
+5. Crop readiness/attention on Today, a bounded co-op invite selector and a complete no-reservation quick start.
+6. Clear quality-unit pricing plus the personal Sell bonus, avoiding misleading rounded per-unit totals.
+
+Audit captures before and after are retained in `docs/hub-ux-audit/`; final states are numbered `11` through `20`.
+
 Accessibility checks now include dialog focus restoration/trapping, keyboard-operable FarmSelect, live-region notices, semantic dialog busy state, disabled pending controls and reduced-motion handling.
 
 ## Scale evidence
@@ -66,11 +77,13 @@ This validates Hub scaling only. FiveM world placement, crop culling and FPS rem
 3. Release-readiness review found P2 interaction drift: Hub invalidations were ignored, guests could see extension affordances, modal/select keyboard behavior was incomplete and notices were not announced.
 4. Current iteration reloads active data on invalidation, mirrors authoritative owner/participation gates, preserves cart/selection after rejection, traps modal focus, fixes Escape behavior, completes select keyboard navigation and adds live regions/reduced motion.
 5. Post-fix source/implementation comparison and route captures found no remaining actionable P0/P1/P2 visual or interaction mismatch. No P3 follow-up is required for this release candidate.
+6. Complete-route UX audit found P2 operational-context gaps: the player's own Field looked like any other reservation, expiry and balance consequences were hidden, topology started blank, rounded Sell unit copy could disagree with exact totals, and progression lacked a discoverable detail view.
+7. The current iteration resolves those findings without adding a top-level route or weakening the original visual system. Tablet and physical surfaces retain their distinct frames and authority.
 
 ## Automated verification
 
 - Lua: 51 authoritative domain tests passed; generated inventory/catalog artifacts are current.
-- Web: typecheck, lint, 97 Vitest tests, production build and 4 Sites packaging tests passed.
+- Web: typecheck, lint, 101 Vitest tests, production build and 4 Sites packaging tests passed.
 - Inspection HUD: typecheck, lint, 8 tests, production build and production-contract verification passed.
 - Minigames: typecheck, lint, 11 tests and production build passed while the feature remains disabled for v1.
 
