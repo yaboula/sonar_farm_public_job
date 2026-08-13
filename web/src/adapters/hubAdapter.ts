@@ -81,6 +81,13 @@ function previewSurface(): HubSurface {
   return candidate === "market" || candidate === "sell" ? candidate : "tablet";
 }
 
+function detailReservation(selected: PublicField): Reservation | undefined {
+  const mode = new URLSearchParams(window.location.search).get("participation");
+  if (mode === "none") return undefined;
+  if (mode === "guest" && selected.id === reservation.fieldId) return { ...reservation, isOwner: false };
+  return reservation;
+}
+
 class FixtureAdapter implements HubAdapter {
   async bootstrap(): Promise<HubContextModel> {
     const surface = previewSurface();
@@ -96,7 +103,7 @@ class FixtureAdapter implements HubAdapter {
     const state = previewState();
     if (state !== "ready") return { request: { kind, route, fieldId }, state };
     const selected = fieldSeed.find((field) => field.id === fieldId) ?? fieldSeed[0];
-    const detail: FieldDetailData = { field: detailedField(selected), reservation: reservation.fieldId === selected.id ? reservation : undefined, progression, rentPlans: selected.rentPlans };
+    const detail: FieldDetailData = { field: detailedField(selected), reservation: detailReservation(selected), progression, rentPlans: selected.rentPlans };
     const data = kind === "inviteCandidates" ? [{ source: 21, name: "Jamie Crops" }, { source: 36, name: "Robin Acre" }]
       : kind === "fieldDetail" ? detail
       : route === "today" ? today

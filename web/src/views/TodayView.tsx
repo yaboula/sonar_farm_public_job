@@ -5,6 +5,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { StatePanel } from "../components/StatePanel";
 import { useHubView } from "../hooks/useHubView";
 import { useHub } from "../store/HubContext";
+import { rejectionMessage } from "../utils/rejectionMessage";
 import type { TodayData } from "../types";
 
 const money = (value: number) => `$${value.toLocaleString("en-US")}`;
@@ -41,7 +42,7 @@ export function TodayView() {
     setBusy(true);
     const result = await hub.adapter.dispatch(intent);
     setBusy(false);
-    setNotice(result.message ?? (result.ok ? "Farm record updated." : result.reason ?? "Action rejected."));
+    setNotice(result.message ?? (result.ok ? "Farm record updated." : rejectionMessage(result.reason, "Action rejected.")));
     if (result.ok) await view.reload();
     return result.ok;
   };
@@ -57,7 +58,7 @@ export function TodayView() {
       <div className="today-image" aria-hidden="true" />
       <div className="today-vignette" aria-hidden="true" />
       <header className="today-intro"><span>Personal farming</span><h1>Today</h1><p>What needs your attention now?</p></header>
-      {notice ? <div className="domain-notice domain-notice--today">{notice}</div> : null}
+      {notice ? <div className="domain-notice domain-notice--today" role="status" aria-live="polite">{notice}</div> : null}
       <article className="assignment-hero publicjob-hero">
         <span className={`status-pill ${reservation?.status ?? "neutral"}`}><Clock size={18} />{reservation ? reservation.status : "Ready to farm"}</span>
         {reservation ? <>

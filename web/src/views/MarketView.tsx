@@ -7,6 +7,7 @@ import { StatePanel } from "../components/StatePanel";
 import { CANONICAL_MARKET_PRODUCTS } from "../data/itemCatalog.generated";
 import { useHubView } from "../hooks/useHubView";
 import { useHub } from "../store/HubContext";
+import { rejectionMessage } from "../utils/rejectionMessage";
 import type { MarketData, MarketDisplayProduct, MarketProduct } from "../types";
 
 const categoryOptions = ["All", "Access", "Seedlings", "Seeds", "Hand Tools", "Watering", "Fertilizer", "Pest Treatment"].map((value) => ({ value, label: value }));
@@ -51,7 +52,7 @@ export function MarketView() {
     setBusy(true);
     const result = await hub.adapter.dispatch({ type: "market.purchase", input: { lines: lines.map((line) => ({ itemId: line.product.id, quantity: line.quantity })), operationId: operationRef.current, physical: hub.surface === "market", marketId: hub.marketId } });
     setBusy(false);
-    setNotice(result.message ?? (result.ok ? `Purchase completed for $${total.toLocaleString()}.` : result.reason ?? "Purchase rejected."));
+    setNotice(result.message ?? (result.ok ? `Purchase completed for $${total.toLocaleString()}.` : rejectionMessage(result.reason, "Purchase rejected.")));
     if (result.ok) { operationRef.current = undefined; setCart({}); setReviewOpen(false); await view.reload(); }
   };
 
@@ -59,7 +60,7 @@ export function MarketView() {
   const aside = <div className="detail-inspector supply-inspector"><span className="inspector-kicker">Purchase cart</span><ShoppingCartSimple size={38} weight="thin" /><h2>{lines.length ? `${lines.length} line${lines.length === 1 ? "" : "s"}` : "Cart empty"}</h2><p>Personal bank payment · immediate inventory delivery</p><div className="supply-payer-summary"><span>Purchase payer</span><strong>Personal Bank</strong><small>Server validates funds at confirmation</small></div><div className="inspector-rule" />{lines.length ? <div className="mini-cart">{lines.slice(0, 4).map((line) => <div key={line.product.id}><span className="mini-cart-quantity">{line.quantity}×</span><span className="mini-cart-name">{line.product.label}</span><strong>${(line.product.price * line.quantity).toLocaleString()}</strong></div>)}{lines.length > 4 ? <p className="mini-cart-more">+{lines.length - 4} more selected products</p> : null}</div> : <p className="inspector-description">Choose quantities from the catalog. Level, global stock, bank funds and inventory capacity are revalidated by the server.</p>}<div className="supply-cart-total"><span>Total</span><strong>${total.toLocaleString()}</strong></div><div className="physical-note"><Package size={19} /><span>{hub.surface === "market" ? "Physical Market: tablet purchase is available here." : "Tablet delivery is immediate. The tablet itself is sold only at a physical Market."}</span></div><button type="button" className="inspector-action" disabled={!lines.length || busy || lines.length > 10} onClick={() => setReviewOpen(true)}>Review Purchase<CaretRight size={18} /></button></div>;
 
   return <HubScaffold eyebrow="Materials & tools" title="Market" subtitle="Buy personal farming inputs with immediate delivery to your inventory." toolbar={toolbar} aside={aside}>
-    {notice ? <div className="domain-notice domain-notice--inline">{notice}</div> : null}
+    {notice ? <div className="domain-notice domain-notice--inline" role="status" aria-live="polite">{notice}</div> : null}
     <div className="supply-grid">{visibleProducts.length ? visibleProducts.map((item) => {
       const quantity = cart[item.id] ?? 0;
       const physicallyBlocked = item.physicalOnly && hub.surface !== "market";

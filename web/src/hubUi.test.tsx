@@ -1,11 +1,12 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { StatePanel } from "./components/StatePanel";
 import { calculateSurfaceScale } from "./components/SurfaceStage";
 import { HubProvider } from "./store/HubContext";
+import { hubAdapter } from "./adapters/hubAdapter";
 import type { ViewState } from "./types";
 
 function renderHub(route: string) {
@@ -85,6 +86,60 @@ describe("public-job Hub visual contract", () => {
     expect(screen.getByRole("region", { name: "South Fields topology" })).toBeVisible();
     await user.click(screen.getByRole("button", { name: /6 hours/ }));
     expect(screen.getByRole("dialog", { name: "Extend for 6 hours?" })).toBeVisible();
+  });
+
+  it("keeps extension owner-only and blocks a second simultaneous Field", async () => {
+    window.history.replaceState({}, "", "/?participation=guest");
+    const guest = renderHub("/fields/grapeseed_south");
+    await screen.findByRole("heading", { name: "South Fields" });
+    expect(screen.getByText("Only the reservation owner can extend this Field.")).toBeVisible();
+    expect(screen.getByRole("button", { name: /6 hours/ })).toBeDisabled();
+    guest.unmount();
+
+    window.history.replaceState({}, "", "/");
+    renderHub("/fields/paleto_creek");
+    await screen.findByRole("heading", { name: "Creek Plot" });
+    expect(screen.getByText("You already participate in another Field.")).toBeVisible();
+    expect(screen.getByRole("button", { name: /6 hours/ })).toBeDisabled();
+  });
+
+  it("reloads the active view when the server invalidates Hub data", async () => {
+    const load = vi.spyOn(hubAdapter, "load");
+    renderHub("/today");
+    await screen.findByRole("heading", { name: "Today" });
+    const previous = load.mock.calls.length;
+    window.dispatchEvent(new MessageEvent("message", { data: { type: "hub:invalidate", payload: { scope: "field" } } }));
+    await waitFor(() => expect(load.mock.calls.length).toBeGreaterThan(previous));
+    load.mockRestore();
+  });
+
+  it("traps dialog focus and Escape closes only the confirmation", async () => {
+    const close = vi.spyOn(hubAdapter, "close");
+    const user = userEvent.setup();
+    renderHub("/market");
+    await screen.findByRole("heading", { name: "Market" });
+    await user.click(screen.getByRole("button", { name: "Add Carrot Seeds" }));
+    await user.click(screen.getByRole("button", { name: "Review Purchase" }));
+    const dialog = screen.getByRole("dialog", { name: "Confirm this purchase?" });
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(within(dialog).getByRole("button", { name: "Close" })).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(within(dialog).getByRole("button", { name: "Pay $24" })).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(close).not.toHaveBeenCalled();
+    close.mockRestore();
+  });
+
+  it("supports keyboard navigation in FarmSelect", async () => {
+    const user = userEvent.setup();
+    renderHub("/market");
+    await screen.findByRole("heading", { name: "Market" });
+    const select = screen.getByRole("button", { name: "Category" });
+    select.focus();
+    await user.keyboard("{ArrowDown}{ArrowDown}{Enter}");
+    expect(select).toHaveTextContent("Access");
   });
 
   it("keeps remote Sell browse-only and enables confirmation at the physical buyer", async () => {

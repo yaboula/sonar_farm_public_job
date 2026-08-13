@@ -351,4 +351,8 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { to { opacity: .35; } }
 
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
+
 @media (max-width: 900px),(max-height: 650px) { .surface-stage { transform-origin: center; } }
