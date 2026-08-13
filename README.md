@@ -33,6 +33,7 @@ Company, treasury, warehouse, P2P marketplace, staff, contracts, cargo, seasons,
    ```
 
 2. Follow [Installation](docs/INSTALLATION.md) for the QB job, ox_inventory items, ACE and SQL.
+   The licensed Bzzz crop prop pack is an external production dependency; a built-in fallback model is used only to keep missing-pack installations diagnosable.
 3. Review [Economy](docs/ECONOMY.md), especially rental and Market prices.
 4. Run the [administration runbook](docs/RUNBOOK.md).
 5. Complete the [release checklist](docs/RELEASE_CHECKLIST.md) before tagging.

@@ -2,69 +2,80 @@
 
 Date: 2026-08-13  
 Branch: `codex/publicjob-v1`  
-Scope: Today, Fields, Field Detail, Market and Sell
+Scope: Today, Fields, Field Detail, Market and Sell after release-readiness hardening
 
 ## Sources of truth
 
 - Read-only implementation reference: `D:\sonar_app\sonar_farm\web`
 - User-supplied Supplies reference: `C:\Users\aboul\AppData\Local\Temp\codex-clipboard-f76aa251-430f-4c43-8dc8-1c2f4df573e8.png`
+- Normalized original Supplies capture: `C:\Users\aboul\.codex\audits\sonar-farm-publicjob\2026-08-13\ui-rebuild\origin-supplies-1280x720.png`
 - Rejected pre-rebuild Public Job capture: `C:\Users\aboul\AppData\Local\Temp\codex-clipboard-2b809581-1e35-485b-bea1-577ea3a0687f.png`
 - Reused source assets: `tablet-frame.webp`, `office-frame.webp`, farm background, catalog item artwork, Barlow Condensed, Source Sans 3 and Phosphor Icons.
 
-The original `sonar_farm` visual system is authoritative. Public Job removes business capabilities and terminology, but does not introduce a new visual direction.
+The original `sonar_farm` visual system remains authoritative. Public Job removes business capabilities and terminology without introducing another visual direction.
 
-## Comparison method
+## Final comparison evidence
 
-The original Supplies screen and rebuilt Public Job Market were opened with the Codex integrated Browser, captured at the same browser viewport and placed in one combined comparison input.
+The original Supplies screen and current Public Job Market were captured at the same viewport and placed in one combined comparison image before review.
 
-- Browser viewport: 1280×720
-- Device pixel ratio: 1.25
-- Logical product canvas: 1440×810
-- Measured screen in both captures: x 129.54, y 72.87, width 1020.919, height 574.267
-- Original capture: `C:\Users\aboul\.codex\audits\sonar-farm-publicjob\2026-08-13\ui-rebuild\origin-supplies-1280x720.png`
-- Implementation capture: `C:\Users\aboul\.codex\audits\sonar-farm-publicjob\2026-08-13\ui-rebuild\publicjob-market-1280x720.png`
-- Combined comparison: `C:\Users\aboul\.codex\audits\sonar-farm-publicjob\2026-08-13\ui-rebuild\market-comparison-normalized.png`
+- CSS viewport: 1280×720
+- Device pixel ratio: 1
+- Source pixels: 1280×720
+- Implementation pixels: 1280×720
+- Density normalization: none required; both inputs are one CSS pixel per output pixel
+- Logical product canvas: 1440×810 inside the original 1584×914 physical frame
+- Measured implementation screen: x 129.54, y 72.87, width 1020.92, height 574.27
+- State: physical Market, empty cart, complete catalog at initial scroll position
+- Implementation: `docs/design-qa/market-1280x720-final.png`
+- Combined comparison: `docs/design-qa/market-comparison-final.png`
 
-The comparison covered the header geometry, navigation rhythm, title block, toolbar, dense two-column product cards, real item artwork, tiers, stock and quantity controls, right-hand inspector, charcoal/yellow tokens, borders, shadows and typography. The source-only preview toolbar is development tooling and is intentionally absent from the target resource.
+The full-view comparison verifies composition, frame, header geometry, navigation rhythm, title block, toolbar, dense two-column catalog, right-hand purchase inspector and above-the-fold crop. Focused card/inspector regions were also reviewed because typography, real item artwork, tier badges, stock, prices and steppers are too small to judge reliably from composition alone.
 
-## Iterations and findings
+## Required fidelity surfaces
 
-1. Initial Public Job UI: light, sparse conventional dashboard. Classified P1 because composition, density, palette, frame, typography and catalog treatment did not match the source.
-2. Foundation rebuild: restored `SurfaceStage`, fixed canvas scaling, physical frames, source typography/tokens, header, scaffold, selectors, state panels, dialogs, deep-view shell and FieldMap patterns.
-3. Route rebuild: rebuilt all five views together and restored the Market/Sell catalog-inspector workflows with public-job data and terminology.
-4. Normalized side-by-side review: no remaining P0, P1 or P2 visual mismatch. No cropped controls, incorrect spacing, broken image sizing or unintended responsive reflow was observed.
+- Fonts and typography: Barlow Condensed display hierarchy and Source Sans 3 body copy remain aligned with the original weights, capitalization, line height and density. No fallback-font flashes or broken wrapping were observed.
+- Spacing and layout rhythm: source canvas proportions, margins, two-column cards, inspector width, separators and vertical crop remain consistent. No persistent control is clipped.
+- Colors and tokens: charcoal surfaces, yellow accent, muted olive borders, semantic status colors and disabled opacity remain mapped to the source system.
+- Image quality and assets: original catalog PNG artwork, frame WebPs and background are sharp, correctly contained and free of placeholder or CSS-drawn substitutes. Phosphor provides the UI icon family.
+- Copy and content: Market/Sell copy is personal, immediate-delivery and personal-bank language. Company, Treasury, Warehouse, Work and Cargo terminology is absent.
 
 ## Route and interaction evidence
 
-- Today: `C:\Users\aboul\.codex\audits\sonar-farm-publicjob\2026-08-13\ui-rebuild\today-pass-1.png`
-- Fields: `C:\Users\aboul\.codex\audits\sonar-farm-publicjob\2026-08-13\ui-rebuild\fields-pass-1.png`
-- Field Detail: `C:\Users\aboul\.codex\audits\sonar-farm-publicjob\2026-08-13\ui-rebuild\field-detail-pass-1.png`
-- Extension confirmation: `C:\Users\aboul\.codex\audits\sonar-farm-publicjob\2026-08-13\ui-rebuild\field-extend-dialog.png`
-- Market confirmation: `C:\Users\aboul\.codex\audits\sonar-farm-publicjob\2026-08-13\ui-rebuild\market-purchase-dialog.png`
-- Physical Market: `C:\Users\aboul\.codex\audits\sonar-farm-publicjob\2026-08-13\ui-rebuild\market-physical-pass-1.png`
-- Remote Sell: `C:\Users\aboul\.codex\audits\sonar-farm-publicjob\2026-08-13\ui-rebuild\sell-remote-pass-1.png`
-- Physical Sell confirmation: `C:\Users\aboul\.codex\audits\sonar-farm-publicjob\2026-08-13\ui-rebuild\sell-physical-dialog.png`
+- Today: `docs/design-qa/today-1280x720-final.png`
+- Fields: `docs/design-qa/fields-1280x720-final.png`
+- Field Detail: `docs/design-qa/field-detail-1280x720-final.png`
+- Market: `docs/design-qa/market-1280x720-final.png`
+- Physical Sell: `docs/design-qa/sell-1280x720-final.png`
 
-Verified interactions include route navigation, search, category filters, quantity steppers, ten-line cart limit, level and stock gates, physical-only tablet purchase, exact purchase review, field topology, reservation extension, privacy, remote Sell route-only behavior, physical Sell review and exact bank preview. Loading, empty, blocked, error, restricted and unavailable states use the shared dark `StatePanel` treatment. Server rejection preserves the active cart or selection; successful confirmation clears it.
+Integrated Browser checks passed for navigation, Market quantity selection, purchase review, dialog focus containment, Escape closing only the confirmation, owner-only extension, existing-participation blocking and physical Sell rendering. The Browser console contained no warnings or errors.
 
-The integrated Browser console reported no warnings or errors during the full flow.
+Accessibility checks now include dialog focus restoration/trapping, keyboard-operable FarmSelect, live-region notices, semantic dialog busy state, disabled pending controls and reduced-motion handling.
 
-## Scale coverage
+## Scale evidence
 
-- 1280×720: proportional fit, no overflow or clipping.
-- 1920×1080: proportional fit, no overflow or clipping.
-- 2560×1080 ultrawide: proportional fit centered within the world stage, no overflow or clipping.
+- 1280×720: screen 1020.92×574.27; no document overflow.
+- 1920×1080: screen 1588.10×893.30; no document overflow.
+- 2560×1080 ultrawide: screen 1588.10×893.30 and centered; no document overflow.
+
+This validates Hub scaling only. FiveM world placement, crop culling and FPS remain separate manual release gates.
+
+## Comparison history
+
+1. Initial Public Job UI was a light, sparse dashboard. P1: composition, density, palette, frame, typography and catalog treatment diverged from the source.
+2. Foundation and route rebuild restored the source visual system and all five public routes. The normalized source/implementation comparison cleared the earlier P1.
+3. Release-readiness review found P2 interaction drift: Hub invalidations were ignored, guests could see extension affordances, modal/select keyboard behavior was incomplete and notices were not announced.
+4. Current iteration reloads active data on invalidation, mirrors authoritative owner/participation gates, preserves cart/selection after rejection, traps modal focus, fixes Escape behavior, completes select keyboard navigation and adds live regions/reduced motion.
+5. Post-fix source/implementation comparison and route captures found no remaining actionable P0/P1/P2 visual or interaction mismatch. No P3 follow-up is required for this release candidate.
 
 ## Automated verification
 
-- Web: typecheck, lint, 93 Vitest tests, production build and 4 Sites packaging tests passed.
-- Lua: 50 authoritative domain tests passed.
+- Lua: 51 authoritative domain tests passed; generated inventory/catalog artifacts are current.
+- Web: typecheck, lint, 97 Vitest tests, production build and 4 Sites packaging tests passed.
 - Inspection HUD: typecheck, lint, 8 tests, production build and production-contract verification passed.
-- Minigames: typecheck, lint, 11 tests and production build passed while remaining disabled for v1.
-- Generated ox_inventory and web catalog artifacts are current.
+- Minigames: typecheck, lint, 11 tests and production build passed while the feature remains disabled for v1.
 
-## Result
+## Residual release gates
 
-No P0, P1 or P2 design issues remain in the normalized comparison or route review.
+Multi-client reservation/stock races, resource restarts, real ox_inventory/bank failures, licensed crop props, all six in-world topologies, NPC placement, ground snap, target reachability, resmon and FPS require a running FiveM staging server. They remain unchecked in `docs/RELEASE_CHECKLIST.md` and do not alter this browser design result.
 
 final result: passed

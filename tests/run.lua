@@ -1220,11 +1220,47 @@ test('public callbacks retain server-side authority and recovery hooks', functio
     assert(reservations:find("return nil, 'reservation_grace'", 1, true), 'planting must stop in grace')
     assert(reservations:find('return MySQL.update.await([[INSERT INTO sfpj_economy_operations', 1, true),
         'reservation operation insert result must drive idempotency')
-    assert(fields:find('reservation = ownReservation', 1, true),
-        'Field Detail must never disclose another holder or co-op roster')
+    assert(fields:find('reservation = overview.reservation', 1, true),
+        'Field Detail may expose only the authenticated viewer own participation')
+    assert(fields:find('local claim = Reservations.GetByField(field.id)', 1, true)
+        and not fields:find('owner_identifier', 1, true),
+        'Field Detail must never disclose another holder identity')
     assert(market:find('sfpj_economy_outbox', 1, true), 'Market compensation must use the outbox')
     assert(sell:find('metadata.producer == identifier', 1, true), 'Sell must enforce producer ownership')
     assert(sell:find('metadata.resource == Sonar.Constants.RESOURCE', 1, true), 'Sell must reject foreign produce')
+end)
+
+test('release critical recovery and client permissions stay fail closed', function()
+    local function read(path)
+        local file = assert(io.open(path, 'rb')); local value = file:read('*a'); file:close(); return value
+    end
+    local database = read('server/modules/publicjob/database.lua')
+    local progression = read('server/modules/progression/service.lua')
+    local reservations = read('server/modules/reservations/service.lua')
+    local fields = read('server/modules/fields/service.lua')
+    local sell = read('server/modules/sell/service.lua')
+    local slots = read('client/modules/zones/slots.lua')
+    local hub = read('client/modules/hub/controller.lua')
+    local purgeDelete = assert(reservations:find('DELETE FROM sfpj_crops WHERE id IN', 1, true))
+    local purgeState = assert(reservations:find('State.Remove(crop.id)', 1, true))
+    assert(purgeDelete < purgeState, 'persistent crop deletion must commit before hot-state removal')
+    assert(reservations:find('tonumber(reservation.expires_at)', 1, true)
+        and reservations:find("Reservations.Purge(reservation.id, 'grace_expired')", 1, true),
+        'restart grace must derive from original expiry and purge elapsed grace')
+    assert(progression:find('MySQL.transaction.await({', 1, true)
+        and progression:find('UPDATE sfpj_players SET total_xp=total_xp+?', 1, true),
+        'XP ledger and total update must share one transaction')
+    assert(database:find("'finalize_operation'", 1, true)
+        and database:find('function PublicJobEconomy.ReconcileFinalizations', 1, true),
+        'receipt finalization must have a durable recovery path')
+    assert(sell:find("status='processing'", 1, true), 'bank credits must be claimed before external mutation')
+    assert(fields:find('local participates = link and link.field_id == id', 1, true),
+        'slot topology must stream only to active Field participants')
+    assert(slots:find("slot.memberStatus == 'active'", 1, true)
+        and slots:find('crop and crop.isMine', 1, true),
+        'client target affordances must mirror active/departing ownership rules')
+    assert(hub:find("payload.scope == 'field'", 1, true) and hub:find('Sync.RefreshNow()', 1, true),
+        'reservation invalidation must refresh the gameplay subscription')
 end)
 
 print(('All %d tests passed.'):format(passed))

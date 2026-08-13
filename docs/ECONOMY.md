@@ -24,4 +24,6 @@ Only stacks with matching resource and producer metadata are eligible. Foreign, 
 
 ## Recovery
 
-Every debit/credit flow uses a caller operation ID. Completed operations create receipts. Failed post-debit deliveries compensate the bank; failed credits enter `sfpj_economy_outbox` and are retried by the worker or `/sfpj_reconcile`.
+Every debit/credit flow uses a caller operation ID. Reservation commits, Market deliveries and Sell credits are persisted before receipt finalization. A failed receipt transaction enters the `finalize_operation` outbox and remains replay-safe while reconciliation completes. Failed post-debit deliveries compensate the bank; failed credits enter the `bank_credit` outbox and are retried by the worker or `/sfpj_reconcile`.
+
+QB-Core bank mutations and MySQL cannot share one atomic transaction. The resource therefore claims each credit outbox row before touching the bank. A row left in `processing` after a crash is intentionally not auto-replayed because its bank outcome is ambiguous; an administrator must compare the operation ID in QB transaction logs before resolving it. This favors protection from duplicate payouts over guessing.
