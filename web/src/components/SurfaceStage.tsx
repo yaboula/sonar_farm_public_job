@@ -1,13 +1,47 @@
 import { type PropsWithChildren, useEffect, useState } from "react";
+import { useHub } from "../store/HubContext";
 import { AppHeader } from "./AppHeader";
-const WIDTH = 1440, HEIGHT = 810, INSET = 24;
-export function calculateSurfaceScale(width: number, height: number) {
-  return Math.min((width - INSET * 2) / WIDTH, (height - INSET * 2) / HEIGHT);
+
+const FRAME_WIDTH = 1584;
+const FRAME_HEIGHT = 914;
+const VIEWPORT_INSET = 36;
+
+export function calculateSurfaceScale(viewportWidth: number, viewportHeight: number) {
+  return Math.min(
+    (viewportWidth - VIEWPORT_INSET * 2) / FRAME_WIDTH,
+    (viewportHeight - VIEWPORT_INSET * 2) / FRAME_HEIGHT,
+  );
 }
+
+function getStageScale() {
+  return calculateSurfaceScale(window.innerWidth, window.innerHeight);
+}
+
 export function SurfaceStage({ children }: PropsWithChildren) {
-  const [scale, setScale] = useState(() => calculateSurfaceScale(innerWidth, innerHeight));
-  useEffect(() => { const resize = () => setScale(calculateSurfaceScale(innerWidth, innerHeight)); addEventListener("resize", resize); return () => removeEventListener("resize", resize); }, []);
-  return <div className="world-stage"><section className="hub-canvas" style={{ "--hub-scale": String(Math.max(.35, scale)) } as React.CSSProperties}>
-    <AppHeader /><main className="hub-content">{children}</main>
-  </section></div>;
+  const { surface } = useHub();
+  const [scale, setScale] = useState(getStageScale);
+  useEffect(() => {
+    const update = () => setScale(getStageScale());
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  const frameImage = surface === "tablet"
+    ? "./assets/images/tablet-frame.webp"
+    : "./assets/images/office-frame.webp";
+
+  return (
+    <div className={import.meta.env.DEV ? "world-stage preview-world" : "world-stage"}>
+      <div
+        className={`surface-stage surface-stage--${surface === "tablet" ? "tablet" : "terminal"}`}
+        style={{ "--surface-scale": String(Math.max(scale, 0.35)) } as React.CSSProperties}
+      >
+        <div className="surface-screen" data-testid="surface-screen">
+          <AppHeader />
+          <main className="surface-content">{children}</main>
+        </div>
+        <img className="surface-frame-art" src={frameImage} alt="" aria-hidden="true" />
+      </div>
+    </div>
+  );
 }
