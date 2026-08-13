@@ -82,14 +82,6 @@ local function operation(operationId, identifier, kind, status, amount, payload)
         { operationId, identifier, kind, status, amount, encode(payload) })
 end
 
-local function completeOperation(operationId, identifier, kind, amount, payload)
-    MySQL.transaction.await({
-        { query = "UPDATE sfpj_economy_operations SET status='completed',last_error=NULL WHERE id=?", values = { operationId } },
-        { query = [[INSERT IGNORE INTO sfpj_economy_receipts (operation_id,identifier,kind,amount,payload)
-            VALUES (?,?,?,?,?)]], values = { operationId, identifier, kind, amount, encode(payload) } },
-    })
-end
-
 local function compensate(identifier, amount, operationId, reason)
     if Bridge.CreditMoney(identifier, 'bank', amount, reason, operationId .. ':refund') then
         MySQL.update.await("UPDATE sfpj_economy_operations SET status='compensated',last_error=? WHERE id=?",
@@ -124,7 +116,7 @@ function Reservations.Reserve(source, fieldId, hours, operationId)
         local paid, base = price(field.sizeClass, hours, progress.level, false)
         local replay = MySQL.single.await("SELECT status FROM sfpj_economy_operations WHERE id=? AND identifier=? AND kind='reservation'",
             { operationId, actor.identifier })
-        if replay then return { ok = replay.status == 'completed', reason = replay.status, replay = true } end
+        if replay then return { ok = PublicJobEconomy.IsFulfilled(replay.status), reason = replay.status, replay = true } end
         if tonumber(operation(operationId, actor.identifier, 'reservation', 'prepared', paid,
             { fieldId = field.id, hours = hours })) ~= 1 then return { ok = false, reason = 'operation_conflict' } end
         if not Bridge.DebitMoney(source, 'bank', paid, 'Public field reservation', operationId) then
@@ -144,12 +136,14 @@ function Reservations.Reserve(source, fieldId, hours, operationId)
               values = { reservationId, actor.identifier, actor.name, timestamp } },
             { query = "INSERT INTO sfpj_player_links (identifier,reservation_id,member_status) VALUES (?,?,'active')",
               values = { actor.identifier, reservationId } },
+            { query = "UPDATE sfpj_economy_operations SET status='committed',payload=? WHERE id=?",
+              values = { encode({ reservationId = reservationId, fieldId = field.id }), operationId } },
         })
         if not committed then
             compensate(actor.identifier, paid, operationId, 'reservation_commit_failed')
             return { ok = false, reason = 'field_unavailable' }
         end
-        completeOperation(operationId, actor.identifier, 'reservation', paid, { reservationId = reservationId, fieldId = field.id })
+        PublicJobEconomy.Finalize(operationId)
         Fields.BroadcastInvalidate(field.id, 'reserved')
         return { ok = true, reservation = Reservations.Snapshot(reservationId, actor.identifier) }
     end)
@@ -178,21 +172,25 @@ function Reservations.Extend(source, hours, operationId)
         local paid = price(field.sizeClass, hours, progress.level, reservation.status == 'grace')
         local replay = MySQL.single.await("SELECT status FROM sfpj_economy_operations WHERE id=? AND identifier=? AND kind='extension'",
             { operationId, actor.identifier })
-        if replay then return { ok = replay.status == 'completed', reason = replay.status, replay = true } end
+        if replay then return { ok = PublicJobEconomy.IsFulfilled(replay.status), reason = replay.status, replay = true } end
         if tonumber(operation(operationId, actor.identifier, 'extension', 'prepared', paid,
             { reservationId = reservation.id, hours = hours })) ~= 1 then return { ok = false, reason = 'operation_conflict' } end
         if not Bridge.DebitMoney(source, 'bank', paid, 'Public field extension', operationId) then
             MySQL.update.await("UPDATE sfpj_economy_operations SET status='failed',last_error='insufficient_funds' WHERE id=?", { operationId })
             return { ok = false, reason = 'insufficient_funds' }
         end
-        local changed = MySQL.update.await([[UPDATE sfpj_reservations SET status='active',expires_at=?,grace_until=NULL,
-            plan_hours=?,paid_price=paid_price+? WHERE id=? AND status IN ('active','grace')]],
-            { newExpiry, hours, paid, reservation.id })
-        if tonumber(changed) ~= 1 then
+        local changed = MySQL.transaction.await({
+            { query = [[UPDATE sfpj_reservations SET status='active',expires_at=?,grace_until=NULL,
+                plan_hours=?,paid_price=paid_price+? WHERE id=? AND status IN ('active','grace')]],
+              values = { newExpiry, hours, paid, reservation.id } },
+            { query = "UPDATE sfpj_economy_operations SET status='committed',payload=? WHERE id=?",
+              values = { encode({ reservationId = reservation.id, expiresAt = newExpiry }), operationId } },
+        })
+        if changed ~= true then
             compensate(actor.identifier, paid, operationId, 'extension_commit_failed')
             return { ok = false, reason = 'reservation_changed' }
         end
-        completeOperation(operationId, actor.identifier, 'extension', paid, { reservationId = reservation.id, expiresAt = newExpiry })
+        PublicJobEconomy.Finalize(operationId)
         Fields.BroadcastInvalidate(reservation.field_id, 'extended')
         return { ok = true, reservation = Reservations.Snapshot(reservation.id, actor.identifier) }
     end)
@@ -214,7 +212,6 @@ function Reservations.Purge(reservationId, reason)
     for id, crop in pairs(State.crops or {}) do
         if crop.data and crop.data.reservationId == reservationId then removed[#removed + 1] = { id = id, cell = crop.cell } end
     end
-    for _, crop in ipairs(removed) do State.Remove(crop.id); Sync.OnCropRemoved(crop.id, crop.cell) end
     local timestamp, cooldown = now(), now() + Config.Reservations.SameFieldCooldownSeconds
     local queries = {
         { query = [[INSERT INTO sfpj_cooldowns (identifier,field_id,expires_at)
@@ -228,9 +225,22 @@ function Reservations.Purge(reservationId, reason)
         { query = [[UPDATE sfpj_reservations SET status='released',released_at=?,release_reason=? WHERE id=?]],
           values = { timestamp, reason, reservationId } },
     }
+    if #removed > 0 then
+        local placeholders, values = {}, {}
+        for index, crop in ipairs(removed) do placeholders[index], values[index] = '?', crop.id end
+        queries[#queries + 1] = {
+            query = ('DELETE FROM sfpj_crops WHERE id IN (%s)'):format(table.concat(placeholders, ',')),
+            values = values,
+        }
+    end
     local ok = MySQL.transaction.await(queries)
+    if not ok then return false end
+    for _, crop in ipairs(removed) do
+        State.Remove(crop.id)
+        Sync.OnCropRemoved(crop.id, crop.cell)
+    end
     Fields.BroadcastInvalidate(reservation.field_id, reason)
-    return ok
+    return true
 end
 
 function Reservations.Release(source, confirmed)
@@ -318,8 +328,11 @@ function Reservations.Accept(source, inviteId)
                   values = { actor.identifier, invite.reservation_id } },
                 { query = "UPDATE sfpj_invites SET status='accepted' WHERE id=? AND status='pending'", values = { invite.id } },
             })
-            return committed and { ok = true, reservation = Reservations.Snapshot(invite.reservation_id, actor.identifier) }
-                or { ok = false, reason = 'invite_conflict' }
+            if committed then
+                Fields.BroadcastInvalidate(invite.field_id, 'member_joined')
+                return { ok = true, reservation = Reservations.Snapshot(invite.reservation_id, actor.identifier) }
+            end
+            return { ok = false, reason = 'invite_conflict' }
         end)
         return memberLock and memberResult or { ok = false, reason = 'operation_in_progress' }
     end)
@@ -350,7 +363,9 @@ function Reservations.Leave(source)
     local link = Reservations.GetLink(actor.identifier)
     if not link then return { ok = false, reason = 'reservation_required' } end
     if link.role == 'owner' then return { ok = false, reason = 'owner_must_release' } end
-    return depart(actor, link.reservation_id, actor.identifier)
+    local result = depart(actor, link.reservation_id, actor.identifier)
+    if result.ok then Fields.BroadcastInvalidate(link.field_id, 'member_left') end
+    return result
 end
 
 function Reservations.Revoke(source, targetIdentifier)
@@ -361,7 +376,9 @@ function Reservations.Revoke(source, targetIdentifier)
     local member = MySQL.single.await([[SELECT role,status FROM sfpj_reservation_members
         WHERE reservation_id=? AND identifier=?]], { link.reservation_id, tostring(targetIdentifier) })
     if not member or member.role ~= 'guest' or member.status ~= 'active' then return { ok = false, reason = 'member_not_found' } end
-    return depart(actor, link.reservation_id, tostring(targetIdentifier))
+    local result = depart(actor, link.reservation_id, tostring(targetIdentifier))
+    if result.ok then Fields.BroadcastInvalidate(link.field_id, 'member_revoked') end
+    return result
 end
 
 function Reservations.ResolveAccess(source, fieldId, action, crop)
@@ -400,9 +417,14 @@ function Reservations.Tick(timestamp)
         WHERE status='active' AND expires_at<=?]], { timestamp })) do
         if liveCrops(reservation.id) == 0 then Reservations.Purge(reservation.id, 'expired_empty')
         else
-            MySQL.update.await([[UPDATE sfpj_reservations SET status='grace',grace_until=?
-                WHERE id=? AND status='active']], { timestamp + Config.Reservations.GraceSeconds, reservation.id })
-            Fields.BroadcastInvalidate(reservation.field_id, 'grace_started')
+            local graceUntil = (tonumber(reservation.expires_at) or timestamp) + Config.Reservations.GraceSeconds
+            if graceUntil <= timestamp then
+                Reservations.Purge(reservation.id, 'grace_expired')
+            else
+                MySQL.update.await([[UPDATE sfpj_reservations SET status='grace',grace_until=?
+                    WHERE id=? AND status='active']], { graceUntil, reservation.id })
+                Fields.BroadcastInvalidate(reservation.field_id, 'grace_started')
+            end
         end
     end
     for _, reservation in ipairs(rows([[SELECT id FROM sfpj_reservations

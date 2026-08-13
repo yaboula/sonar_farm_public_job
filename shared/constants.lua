@@ -80,6 +80,7 @@ Constants.CALLBACKS = {
     SUBSCRIBE = 'sonar_farm_publicjob:subscribe',
     ADMIN_AUTHORIZED = 'sonar_farm_publicjob:adminAuthorized',
     FIELD_DRAFT_SAVE = 'sonar_farm_publicjob:fieldDraftSave',
+    FIELD_CATALOG = 'sonar_farm_publicjob:fieldCatalog',
 }
 
 -- Networked event names. Prefixed to avoid collisions with other resources.

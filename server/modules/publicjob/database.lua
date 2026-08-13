@@ -2,6 +2,7 @@
 
 PublicJob = PublicJob or {}
 PublicJobDatabase = PublicJobDatabase or {}
+PublicJobEconomy = PublicJobEconomy or {}
 
 local statements = {
 [[CREATE TABLE IF NOT EXISTS `sfpj_schema_migrations` (
@@ -145,17 +146,54 @@ local requiredTables = {
     'sfpj_economy_receipts', 'sfpj_economy_outbox', 'sfpj_field_events',
 }
 
-function PublicJobDatabase.Init()
-    if not Config.Database.AutoCreateSchema then
-        for _, tableName in ipairs(requiredTables) do
-            local present = MySQL.scalar.await([[SELECT COUNT(*) FROM information_schema.TABLES
-                WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?]], { tableName })
-            if tonumber(present) ~= 1 then
-                Logger.Warn(('Required table %s is missing; import database/publicjob.sql.'):format(tableName), 'db')
+local requiredColumns = {
+    sfpj_players = { 'identifier', 'total_xp' },
+    sfpj_xp_ledger = { 'operation_id', 'identifier', 'amount' },
+    sfpj_fields = { 'id', 'active_revision_id', 'state_sequence' },
+    sfpj_field_slots = { 'revision_id', 'id', 'cell_key' },
+    sfpj_reservations = { 'id', 'field_id', 'owner_identifier', 'status', 'expires_at', 'grace_until' },
+    sfpj_field_claims = { 'field_id', 'reservation_id' },
+    sfpj_reservation_members = { 'reservation_id', 'identifier', 'role', 'status' },
+    sfpj_player_links = { 'identifier', 'reservation_id', 'member_status' },
+    sfpj_market_stock = { 'tier', 'quantity', 'last_restock_at' },
+    sfpj_economy_operations = { 'id', 'identifier', 'kind', 'status', 'amount', 'payload' },
+    sfpj_economy_receipts = { 'operation_id', 'identifier', 'kind', 'amount' },
+    sfpj_economy_outbox = { 'id', 'operation_id', 'action', 'status', 'next_attempt_at' },
+}
+
+local function scalar(query, values)
+    local ok, result = pcall(function() return MySQL.scalar.await(query, values) end)
+    return ok and result or nil
+end
+
+local function transaction(queries)
+    local ok, result = pcall(function() return MySQL.transaction.await(queries) end)
+    return ok and result == true
+end
+
+function PublicJobDatabase.ValidateSchema()
+    for _, tableName in ipairs(requiredTables) do
+        local present = scalar([[SELECT COUNT(*) FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?]], { tableName })
+        if tonumber(present) ~= 1 then
+            Logger.Warn(('Required table %s is missing; import database/publicjob.sql.'):format(tableName), 'db')
+            return false
+        end
+        for _, columnName in ipairs(requiredColumns[tableName] or {}) do
+            local columnPresent = scalar([[SELECT COUNT(*) FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?]], { tableName, columnName })
+            if tonumber(columnPresent) ~= 1 then
+                Logger.Warn(('Table %s is incompatible; missing column %s.'):format(tableName, columnName), 'db')
                 return false
             end
         end
-        return true
+    end
+    return true
+end
+
+function PublicJobDatabase.Init()
+    if not Config.Database.AutoCreateSchema then
+        return PublicJobDatabase.ValidateSchema()
     end
     for index, statement in ipairs(statements) do
         local ok, err = pcall(function() MySQL.query.await(statement) end)
@@ -165,7 +203,69 @@ function PublicJobDatabase.Init()
         end
     end
     MySQL.insert.await('INSERT IGNORE INTO sfpj_schema_migrations (version) VALUES (1)')
-    return true
+    return PublicJobDatabase.ValidateSchema()
+end
+
+local function encode(value) return json.encode(value or {}) end
+
+function PublicJobEconomy.IsFulfilled(status)
+    return status == 'completed' or status == 'finalize_pending' or status == 'committed'
+        or status == 'delivered' or status == 'credited'
+end
+
+function PublicJobEconomy.QueueFinalization(operationId, finalStatus, lastError)
+    return transaction({
+        { query = "UPDATE sfpj_economy_operations SET status='finalize_pending',last_error=? WHERE id=?",
+          values = { lastError or 'receipt_finalize_failed', operationId } },
+        { query = [[INSERT INTO sfpj_economy_outbox (id,operation_id,action,status,payload)
+            VALUES (?,?,'finalize_operation','pending',?)
+            ON DUPLICATE KEY UPDATE status='pending',payload=VALUES(payload),next_attempt_at=0]],
+          values = { Sonar.Utils.Uuid(), operationId, encode({ finalStatus = finalStatus or 'completed' }) } },
+    })
+end
+
+function PublicJobEconomy.Finalize(operationId, finalStatus)
+    finalStatus = finalStatus or 'completed'
+    local queries = {
+        { query = 'UPDATE sfpj_economy_operations SET status=?,last_error=NULL WHERE id=?',
+          values = { finalStatus, operationId } },
+    }
+    if finalStatus == 'completed' then
+        queries[#queries + 1] = { query = [[INSERT IGNORE INTO sfpj_economy_receipts
+            (operation_id,identifier,kind,amount,payload)
+            SELECT id,identifier,kind,amount,payload FROM sfpj_economy_operations WHERE id=?]],
+          values = { operationId } }
+    end
+    if transaction(queries) then return true end
+    PublicJobEconomy.QueueFinalization(operationId, finalStatus, 'receipt_finalize_failed')
+    return false
+end
+
+function PublicJobEconomy.ReconcileFinalizations(timestamp)
+    timestamp = tonumber(timestamp) or Sonar.Time.Now()
+    for _, row in ipairs(MySQL.query.await([[SELECT id,operation_id,payload FROM sfpj_economy_outbox
+        WHERE status='pending' AND action='finalize_operation' AND next_attempt_at<=?
+        ORDER BY created_at LIMIT 25]], { timestamp }) or {}) do
+        local ok, payload = pcall(json.decode, row.payload or '')
+        payload = ok and payload or {}
+        local finalStatus = payload.finalStatus or 'completed'
+        local queries = {
+            { query = "UPDATE sfpj_economy_outbox SET status='completed',attempts=attempts+1,last_error=NULL WHERE id=?",
+              values = { row.id } },
+            { query = 'UPDATE sfpj_economy_operations SET status=?,last_error=NULL WHERE id=?',
+              values = { finalStatus, row.operation_id } },
+        }
+        if finalStatus == 'completed' then
+            queries[#queries + 1] = { query = [[INSERT IGNORE INTO sfpj_economy_receipts
+                (operation_id,identifier,kind,amount,payload)
+                SELECT id,identifier,kind,amount,payload FROM sfpj_economy_operations WHERE id=?]],
+              values = { row.operation_id } }
+        end
+        if not transaction(queries) then
+            MySQL.update.await([[UPDATE sfpj_economy_outbox SET attempts=attempts+1,
+                last_error='receipt_finalize_failed',next_attempt_at=? WHERE id=?]], { timestamp + 30, row.id })
+        end
+    end
 end
 
 function PublicJob.Guard(source)

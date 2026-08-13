@@ -79,7 +79,7 @@ function Sell.Confirm(source, input)
     local acquired, result = Lock.With('sell:' .. actor.identifier, function()
         local replay = MySQL.single.await("SELECT status,amount FROM sfpj_economy_operations WHERE id=? AND identifier=? AND kind='sell'",
             { operationId, actor.identifier })
-        if replay then return { ok = replay.status == 'completed', reason = replay.status,
+        if replay then return { ok = PublicJobEconomy.IsFulfilled(replay.status), reason = replay.status,
             total = tonumber(replay.amount), replay = true } end
         local groups, progress = eligible(source, actor.identifier), Progression.Get(actor.identifier)
         local selections = input.selections or {}
@@ -114,35 +114,52 @@ function Sell.Confirm(source, input)
             })
             return { ok = false, reason = 'sale_pending', operationId = operationId }
         end
-        MySQL.transaction.await({
-            { query = "UPDATE sfpj_economy_operations SET status='completed' WHERE id=?", values = { operationId } },
-            { query = [[INSERT IGNORE INTO sfpj_economy_receipts (operation_id,identifier,kind,amount,payload)
-                VALUES (?,?,'sell',?,?)]], values = { operationId, actor.identifier, preview.total, encode(preview) } },
-        })
+        MySQL.update.await("UPDATE sfpj_economy_operations SET status='credited',payload=?,last_error=NULL WHERE id=?",
+            { encode(preview), operationId })
+        PublicJobEconomy.Finalize(operationId)
+        if HubRuntime and HubRuntime.Invalidate then
+            HubRuntime.Invalidate(source, { scope = 'sell', reason = 'sale_completed' })
+        end
         return { ok = true, operationId = operationId, total = preview.total, receipt = preview }
     end)
     return acquired and result or { ok = false, reason = 'operation_in_progress' }
 end
 
 function Sell.Reconcile()
+    PublicJobEconomy.ReconcileFinalizations(Sonar.Time.Now())
     for _, row in ipairs(MySQL.query.await([[SELECT o.id,o.operation_id,o.payload FROM sfpj_economy_outbox o
         WHERE o.status='pending' AND o.action='bank_credit' AND o.next_attempt_at<=? ORDER BY o.created_at LIMIT 25]],
         { Sonar.Time.Now() }) or {}) do
-        local ok, payload = pcall(json.decode, row.payload or '')
-        payload = ok and payload or {}
-        if payload.identifier and Bridge.CreditMoney(payload.identifier, 'bank', tonumber(payload.amount) or 0,
-            payload.reason or 'Economy reconciliation', row.operation_id .. ':reconcile') then
-            MySQL.transaction.await({
-                { query = "UPDATE sfpj_economy_outbox SET status='completed',attempts=attempts+1 WHERE id=?", values = { row.id } },
-                { query = "UPDATE sfpj_economy_operations SET status=IF(kind='sell','completed','compensated'),last_error=NULL WHERE id=?",
-                  values = { row.operation_id } },
-                { query = [[INSERT IGNORE INTO sfpj_economy_receipts (operation_id,identifier,kind,amount,payload)
-                    SELECT id,identifier,kind,amount,payload FROM sfpj_economy_operations WHERE id=? AND kind='sell']],
-                  values = { row.operation_id } },
-            })
-        else
-            MySQL.update.await([[UPDATE sfpj_economy_outbox SET attempts=attempts+1,last_error='bank_credit_failed',
-                next_attempt_at=? WHERE id=?]], { Sonar.Time.Now() + 30, row.id })
+        local claimed = MySQL.update.await([[UPDATE sfpj_economy_outbox SET status='processing',attempts=attempts+1
+            WHERE id=? AND status='pending']], { row.id })
+        if tonumber(claimed) == 1 then
+            local ok, payload = pcall(json.decode, row.payload or '')
+            payload = ok and payload or {}
+            if payload.identifier and Bridge.CreditMoney(payload.identifier, 'bank', tonumber(payload.amount) or 0,
+                payload.reason or 'Economy reconciliation', row.operation_id .. ':reconcile') then
+                local operation = MySQL.single.await('SELECT kind FROM sfpj_economy_operations WHERE id=?', { row.operation_id })
+                local nextStatus = operation and operation.kind == 'sell' and 'credited' or 'compensated'
+                local committed = MySQL.transaction.await({
+                    { query = "UPDATE sfpj_economy_outbox SET status='completed',last_error=NULL WHERE id=? AND status='processing'",
+                      values = { row.id } },
+                    { query = 'UPDATE sfpj_economy_operations SET status=?,last_error=NULL WHERE id=?',
+                      values = { nextStatus, row.operation_id } },
+                })
+                if committed == true and nextStatus == 'credited' then PublicJobEconomy.Finalize(row.operation_id) end
+            else
+                MySQL.update.await([[UPDATE sfpj_economy_outbox SET status='pending',last_error='bank_credit_failed',
+                    next_attempt_at=? WHERE id=? AND status='processing']], { Sonar.Time.Now() + 30, row.id })
+            end
         end
     end
+end
+
+function Sell.Init()
+    local ambiguous = tonumber(MySQL.scalar.await([[SELECT COUNT(*) FROM sfpj_economy_outbox
+        WHERE status='processing' AND action='bank_credit']])) or 0
+    if ambiguous > 0 then
+        Logger.Warn(('%d bank credit outbox row(s) require transaction-log review before retry.'):format(ambiguous), 'economy')
+    end
+    Sell.Reconcile()
+    return true
 end

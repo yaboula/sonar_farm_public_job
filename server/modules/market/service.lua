@@ -115,7 +115,7 @@ function Market.Purchase(source, input)
     local acquired, result = Lock.With('market:global', function()
         local replay = MySQL.single.await("SELECT status,amount FROM sfpj_economy_operations WHERE id=? AND identifier=? AND kind='market'",
             { operationId, actor.identifier })
-        if replay then return { ok = replay.status == 'completed', reason = replay.status, replay = true } end
+        if replay then return { ok = PublicJobEconomy.IsFulfilled(replay.status), reason = replay.status, replay = true } end
         local progress, requiredStock, total = Progression.Get(actor.identifier), {}, 0
         for _, line in ipairs(lines) do
             local required = Config.Progression.ItemTierLevels[line.item.tier or 'basic'] or 1
@@ -163,11 +163,12 @@ function Market.Purchase(source, input)
             end
             delivered[#delivered + 1] = line
         end
-        MySQL.transaction.await({
-            { query = "UPDATE sfpj_economy_operations SET status='completed' WHERE id=?", values = { operationId } },
-            { query = [[INSERT IGNORE INTO sfpj_economy_receipts (operation_id,identifier,kind,amount,payload)
-                VALUES (?,?,'market',?,?)]], values = { operationId, actor.identifier, total, encode(input.lines) } },
-        })
+        MySQL.update.await("UPDATE sfpj_economy_operations SET status='delivered',payload=?,last_error=NULL WHERE id=?",
+            { encode(input.lines), operationId })
+        PublicJobEconomy.Finalize(operationId)
+        if HubRuntime and HubRuntime.BroadcastInvalidate then
+            HubRuntime.BroadcastInvalidate({ scope = 'market', reason = 'purchase_completed' })
+        end
         return { ok = true, operationId = operationId, total = total, data = Market.Load(source) }
     end)
     return acquired and result or { ok = false, reason = 'operation_in_progress' }

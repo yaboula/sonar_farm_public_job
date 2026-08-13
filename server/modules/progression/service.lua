@@ -68,13 +68,23 @@ function Progression.Award(identifier, operationId, action, cropId, amount, payl
     amount = math.max(0, math.floor(tonumber(amount) or 0))
     if not identifier or not operationId or amount == 0 then return false end
     Progression.Get(identifier)
-    local inserted = MySQL.update.await([[INSERT IGNORE INTO sfpj_xp_ledger
-        (operation_id,identifier,action,crop_id,amount,payload) VALUES (?,?,?,?,?,?)]],
-        { operationId, identifier, action, cropId, amount, encode(payload) })
-    if tonumber(inserted) ~= 1 then return false end
-    MySQL.update.await('UPDATE sfpj_players SET total_xp=total_xp+? WHERE identifier=?', { amount, identifier })
+    local acquired, awarded = Lock.With('progression:' .. identifier, function()
+        local exists = MySQL.scalar.await('SELECT COUNT(*) FROM sfpj_xp_ledger WHERE operation_id=?', { operationId })
+        if tonumber(exists) and tonumber(exists) > 0 then return false end
+        return MySQL.transaction.await({
+            { query = [[INSERT INTO sfpj_xp_ledger
+                (operation_id,identifier,action,crop_id,amount,payload) VALUES (?,?,?,?,?,?)]],
+              values = { operationId, identifier, action, cropId, amount, encode(payload) } },
+            { query = 'UPDATE sfpj_players SET total_xp=total_xp+? WHERE identifier=?',
+              values = { amount, identifier } },
+        }) == true
+    end)
+    if not acquired or not awarded then return false end
     local source = PublicJob.SourceForIdentifier(identifier)
-    if source then TriggerClientEvent('sonar_farm_publicjob:xpAwarded', source, Progression.Get(identifier), amount, action) end
+    if source then
+        TriggerClientEvent('sonar_farm_publicjob:xpAwarded', source, Progression.Get(identifier), amount, action)
+        if HubRuntime and HubRuntime.Invalidate then HubRuntime.Invalidate(source, { scope = 'progression', reason = action }) end
+    end
     return true
 end
 

@@ -25,7 +25,9 @@ CreateThread(function()
     if not Fields.Init() then Runtime.SetStatus(Runtime.STATUS.FAILED, 'fields'); return end
     local loadedOk, loaded = State.LoadAll()
     if not loadedOk then Runtime.SetStatus(Runtime.STATUS.FAILED, 'state_load'); Logger.Warn(tostring(loaded), 'boot'); return end
-    if not Reservations.Init() or not Market.Init() then Runtime.SetStatus(Runtime.STATUS.FAILED, 'services'); return end
+    if not Reservations.Init() or not Market.Init() or not Sell.Init() then
+        Runtime.SetStatus(Runtime.STATUS.FAILED, 'services'); return
+    end
     exports.ox_inventory:registerHook('swapItems', function(payload)
         local item = payload.fromSlot and payload.fromSlot.name
         if item ~= Config.Market.TabletItem or payload.fromInventory == payload.toInventory then return true end

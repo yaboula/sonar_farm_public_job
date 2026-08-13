@@ -46,6 +46,16 @@ function HubRuntime.Validate(source, nonce)
     return session, nil, actor
 end
 
+function HubRuntime.Invalidate(source, payload)
+    if sessions[source] then
+        TriggerClientEvent('sonar_farm_publicjob:hubInvalidate', source, payload or { scope = 'hub' })
+    end
+end
+
+function HubRuntime.BroadcastInvalidate(payload)
+    for source in pairs(sessions) do HubRuntime.Invalidate(source, payload) end
+end
+
 local function today(source, actor)
     local progress, reservation = Progression.Get(actor.identifier), Reservations.GetForPlayer(actor.identifier)
     local ownCrops = 0

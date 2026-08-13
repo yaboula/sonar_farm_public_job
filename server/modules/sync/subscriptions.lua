@@ -311,7 +311,7 @@ lib.callback.register(CALLBACKS.SUBSCRIBE, function(source)
         ok = true,
         cells = cellKeys,
         crops = crops,
-        fields = Fields.IsAuthorityEnabled() and Fields.TopologiesForCells(cellKeys) or nil,
+        fields = Fields.IsAuthorityEnabled() and Fields.TopologiesForCells(cellKeys, identifier) or nil,
         serverTime = Sonar.Time.Now(),
     }
 end)

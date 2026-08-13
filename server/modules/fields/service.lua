@@ -215,16 +215,31 @@ end)
 
 function Fields.Get(fieldId) return active[fieldId] end
 function Fields.ByLegacyZone(zone) return byLegacyZone[zone] end
+function Fields.CatalogBlips()
+    local catalog = {}
+    for _, field in pairs(active) do
+        if field.catalogVisible or Config.Debug then
+            catalog[#catalog + 1] = { id = field.id, name = field.name, access = field.access, blip = field.blip }
+        end
+    end
+    table.sort(catalog, function(left, right) return left.name < right.name end)
+    return catalog
+end
+lib.callback.register(Sonar.Constants.CALLBACKS.FIELD_CATALOG, function() return Fields.CatalogBlips() end)
 function Fields.ResolveLegacySlot(zone, index)
     local field = byLegacyZone[zone]
     return field and field.legacySlots[tonumber(index)] or nil
 end
 
-function Fields.TopologiesForCells(cellKeys)
+function Fields.TopologiesForCells(cellKeys, identifier)
     local output, seen = {}, {}
+    local link = Reservations and Reservations.GetLink(identifier) or nil
     for _, cell in ipairs(cellKeys or {}) do
         for id, field in pairs(byCell[cell] or {}) do
-            if not seen[id] then
+            local participates = link and link.field_id == id
+                and (link.reservation_status == 'active' or link.reservation_status == 'grace')
+                and (link.status == 'active' or link.status == 'departing')
+            if not seen[id] and participates and (field.catalogVisible or Config.Debug) then
                 seen[id] = true
                 local slots = {}
                 for _, slot in ipairs(field.slots) do
@@ -234,7 +249,8 @@ function Fields.TopologiesForCells(cellKeys)
                 end
                 output[#output + 1] = { id = id, name = field.name, access = field.access,
                     revisionId = field.revisionId, topologyRevision = field.topologyRevision,
-                    slots = slots, blip = field.blip }
+                    slots = slots, blip = field.blip, memberStatus = link.status,
+                    reservationStatus = link.reservation_status }
             end
         end
     end
@@ -337,15 +353,20 @@ function Fields.LoadDetail(source, fieldId)
         sizeClass = field.sizeClass, access = field.access, rows = field.rows, slots = field.slots,
         slotCount = #field.slots, requiredLevel = Config.Progression.FieldSizeLevels[field.sizeClass] or 1,
         allowedCrops = field.allowedCrops, available = claim == nil,
-        expiresAt = claim and tonumber(claim.expires_at) or nil }, reservation = ownReservation,
+        expiresAt = claim and tonumber(claim.expires_at) or nil }, reservation = overview.reservation,
         progression = overview.progression, rentPlans = Reservations.PricePlans(field.sizeClass,
             overview.progression.level, ownReservation and ownReservation.status == 'grace') }
 end
 
 function Fields.BroadcastInvalidate(fieldId, reason)
-    for source, subscription in pairs(subscribers) do
-        if subscription.fieldId == fieldId then
-            TriggerClientEvent('sonar_farm_publicjob:hubInvalidate', source, { scope = 'field', fieldId = fieldId, reason = reason })
+    if HubRuntime and HubRuntime.BroadcastInvalidate then
+        HubRuntime.BroadcastInvalidate({ scope = 'field', fieldId = fieldId, reason = reason })
+    else
+        for source, subscription in pairs(subscribers) do
+            if subscription.fieldId == fieldId then
+                TriggerClientEvent('sonar_farm_publicjob:hubInvalidate', source,
+                    { scope = 'field', fieldId = fieldId, reason = reason })
+            end
         end
     end
 end
