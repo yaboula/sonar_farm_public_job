@@ -237,7 +237,7 @@ function Crops.InteractionState(cropId)
     entry.interactions = {
         canWater = not incomplete and not dead
             and (tonumber(condition.water) or 0) < (tonumber(Config.Farming.WaterRefillThreshold) or 100),
-        canHarvest = not incomplete and ((tonumber(condition.progress) or 0) >= 1 or dead),
+        canHarvest = record.isMine and not incomplete and ((tonumber(condition.progress) or 0) >= 1 or dead),
         canFertilize = not incomplete and not dead
             and Sonar.Conditions.IsEnabled(record, 'nutrients')
             and (tonumber(condition.nutrients) or 0)

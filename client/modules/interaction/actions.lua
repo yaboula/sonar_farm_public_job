@@ -16,18 +16,6 @@ local ACTIONS = Sonar.Constants.ACTIONS
 local REJECT = Sonar.Constants.REJECT
 local NOTIFY = Sonar.Constants.NOTIFY
 
--- PLACEHOLDER durations (ms). Stage 5 replaces every one of these with a real
--- minigame, so they are deliberately kept out of config: there is nothing here
--- worth tuning before it gets deleted.
-local PLACEHOLDER_DURATION = {
-    plant = 2500,
-    water = 2000,
-    harvest = 3000,
-    fertilize = 2200,
-    weed = 2500,
-    treat_pest = 2200,
-}
-
 local MESSAGES = {
     [REJECT.RATE_LIMITED] = 'Slow down.',
     [REJECT.SERVICE_UNAVAILABLE] = 'Farming is still starting. Try again shortly.',
@@ -63,6 +51,15 @@ local MESSAGES = {
     [REJECT.MINIGAME_INVALID_TRACE] = 'The planting input could not be verified.',
     [REJECT.PLANTING_INCOMPLETE] = 'This planting is incomplete.',
     [REJECT.INTERNAL_ERROR] = 'Something went wrong.',
+    [REJECT.JOB_REQUIRED] = 'You must be employed as a farmer.',
+    [REJECT.DUTY_REQUIRED] = 'Go on duty before farming.',
+    [REJECT.RESERVATION_REQUIRED] = 'Reserve or join this Field before farming here.',
+    [REJECT.RESERVATION_GRACE] = 'Planting is blocked during the grace period.',
+    [REJECT.LEVEL_REQUIRED] = 'Your farming level does not unlock this material.',
+    [REJECT.PRESENCE_REQUIRED] = 'Move closer to the required farming location.',
+    crop_owner_required = 'Only the producer can harvest this crop.',
+    member_departing = 'Departing members may only care for or harvest their own crops.',
+    reservation_inactive = 'This Field reservation is no longer active.',
 }
 
 -- Rejections that mean our local cache disagrees with the server. Each one is a
@@ -106,21 +103,30 @@ end
 
 Actions.HandleRejection = handleRejection
 
---- PLACEHOLDER progress feedback. Without any delay the action feels unfinished
---- and the gameplay cannot be judged; with a pretty bar we would be building
---- Stage 6 twice. Intentionally plain and temporary.
 ---@param label string
 ---@param action string
 ---@return boolean completed
-local function placeholderProgress(label, action)
-    return lib.progressCircle({
-        duration = PLACEHOLDER_DURATION[action] or 2000,
+local function actionProgress(label, action)
+    local feedback = Config.Gameplay and Config.Gameplay.ActionFeedback
+        and Config.Gameplay.ActionFeedback[action] or {}
+    local options = {
+        duration = tonumber(feedback.duration) or 2000,
         label = label,
         position = 'bottom',
         useWhileDead = false,
         canCancel = true,
-        disable = { car = true, combat = true },
-    })
+        disable = { move = true, car = true, combat = true, sprint = true },
+        anim = feedback.scenario and { scenario = feedback.scenario } or nil,
+    }
+    if feedback.prop then
+        options.prop = {
+            model = feedback.prop,
+            bone = 57005,
+            pos = vec3(0.12, 0.02, -0.03),
+            rot = vec3(-80.0, 15.0, 10.0),
+        }
+    end
+    return lib.progressCircle(options)
 end
 
 -- ---------------------------------------------------------------------------
@@ -146,7 +152,7 @@ function Actions.Plant(cropType, zoneKey, slotIndex)
         return Minigame.Begin(cropType, zoneKey, tonumber(slotIndex))
     end
 
-    if not placeholderProgress(('Planting %s...'):format(def.label), 'plant') then
+    if not actionProgress(('Planting %s...'):format(def.label), 'plant') then
         return
     end
 
@@ -173,7 +179,7 @@ end
 function Actions.Water(cropId, itemId)
     if not cropId then return end
 
-    if not placeholderProgress('Watering...', 'water') then
+    if not actionProgress('Watering...', 'water') then
         return
     end
 
@@ -188,14 +194,14 @@ function Actions.Water(cropId, itemId)
 end
 
 function Actions.Fertilize(cropId, itemId)
-    if not cropId or not placeholderProgress('Fertilizing...', 'fertilize') then return end
+    if not cropId or not actionProgress('Fertilizing...', 'fertilize') then return end
     local response = lib.callback.await(CALLBACKS.FERTILIZE, false, { cropId = cropId, itemId = itemId })
     if not response or not response.ok then return handleRejection(response) end
     Bridge.Notify(('Fertilized. Nutrients %s%%.'):format(response.data.nutrients), NOTIFY.SUCCESS)
 end
 
 function Actions.Weed(cropId, itemId)
-    if not cropId or not placeholderProgress('Removing weeds...', 'weed') then return end
+    if not cropId or not actionProgress('Removing weeds...', 'weed') then return end
     local response = lib.callback.await(CALLBACKS.WEED, false, { cropId = cropId, itemId = itemId })
     if not response or not response.ok then return handleRejection(response) end
     Bridge.Notify(('Weeded. Cover %s%%.'):format(response.data.weedCover), NOTIFY.SUCCESS)
@@ -203,7 +209,7 @@ function Actions.Weed(cropId, itemId)
 end
 
 function Actions.TreatPests(cropId, itemId)
-    if not cropId or not placeholderProgress('Treating pests...', 'treat_pest') then return end
+    if not cropId or not actionProgress('Treating pests...', 'treat_pest') then return end
     local response = lib.callback.await(CALLBACKS.TREAT_PEST, false, { cropId = cropId, itemId = itemId })
     if not response or not response.ok then return handleRejection(response) end
     Bridge.Notify(('Treated. Pest pressure %s%%.'):format(response.data.pestPressure), NOTIFY.SUCCESS)
@@ -286,7 +292,7 @@ function Actions.Harvest(cropId)
     if Inspection and Inspection.IsActive() then Inspection.Close('action') end
     if not cropId then return end
 
-    if not placeholderProgress('Harvesting...', 'harvest') then
+    if not actionProgress('Harvesting...', 'harvest') then
         return
     end
 

@@ -33,6 +33,24 @@ local function propKeyOf(zoneKey, index)
     return ('slot:%s:%d'):format(zoneKey, index)
 end
 
+local function reservationAllows(slot, allowGrace)
+    return slot and (slot.memberStatus == 'active' or slot.memberStatus == 'departing')
+        and (slot.reservationStatus == 'active' or allowGrace and slot.reservationStatus == 'grace')
+end
+
+local function canPlant(slot)
+    return slot and slot.memberStatus == 'active' and slot.reservationStatus == 'active'
+end
+
+local function canCare(slot, crop)
+    if not crop or not reservationAllows(slot, true) then return false end
+    return slot.memberStatus == 'active' or slot.memberStatus == 'departing' and crop.isMine
+end
+
+local function canHarvest(slot, crop)
+    return crop and crop.isMine and reservationAllows(slot, true)
+end
+
 --- Build and register the permanent ox_target sphere for one plot.
 ---@param slot table
 ---@param key string
@@ -58,7 +76,7 @@ local function createSphereZone(slot, key)
                     Actions.OpenPlantMenu(zoneKey, index)
                 end,
                 canInteract = function()
-                    return Sync.IsAvailable() and not Crops.IsSlotOccupied(zoneKey, index)
+                    return Sync.IsAvailable() and canPlant(slot) and not Crops.IsSlotOccupied(zoneKey, index)
                 end,
             },
             {
@@ -71,7 +89,8 @@ local function createSphereZone(slot, key)
                     if cropId then Inspection.Toggle(cropId) end
                 end,
                 canInteract = function()
-                    return Sync.IsAvailable() and Crops.IsSlotOccupied(zoneKey, index)
+                    return Sync.IsAvailable() and reservationAllows(slot, true)
+                        and Crops.IsSlotOccupied(zoneKey, index)
                 end,
             },
             {
@@ -87,7 +106,7 @@ local function createSphereZone(slot, key)
                     if not Sync.IsAvailable() then return false end
                     local cropId = Crops.SlotOccupant(zoneKey, index)
                     local crop = cropId and Crops.Get(cropId)
-                    return crop and crop.isMine
+                    return canPlant(slot) and crop and crop.isMine
                         and (crop.state == CROP_STATE.PLANTING or crop.state == CROP_STATE.PLANTING_FAILED)
                 end,
             },
@@ -104,7 +123,7 @@ local function createSphereZone(slot, key)
                     if not Sync.IsAvailable() then return false end
                     local cropId = Crops.SlotOccupant(zoneKey, index)
                     local crop = cropId and Crops.Get(cropId)
-                    return crop and crop.isMine and crop.state == CROP_STATE.PLANTING_FAILED
+                    return canPlant(slot) and crop and crop.isMine and crop.state == CROP_STATE.PLANTING_FAILED
                 end,
             },
             {
@@ -122,8 +141,9 @@ local function createSphereZone(slot, key)
                     if not Sync.IsAvailable() then return false end
                     local cropId = Crops.SlotOccupant(zoneKey, index)
                     if not cropId then return false end
+                    local crop = Crops.Get(cropId)
                     local state = Crops.InteractionState(cropId)
-                    return state and state.canWater or false
+                    return canCare(slot, crop) and state and state.canWater or false
                 end,
             },
             {
@@ -141,8 +161,9 @@ local function createSphereZone(slot, key)
                     if not Sync.IsAvailable() then return false end
                     local cropId = Crops.SlotOccupant(zoneKey, index)
                     if not cropId then return false end
+                    local crop = Crops.Get(cropId)
                     local state = Crops.InteractionState(cropId)
-                    return state and state.canHarvest or false
+                    return canHarvest(slot, crop) and state and state.canHarvest or false
                 end,
             },
             {
@@ -157,8 +178,9 @@ local function createSphereZone(slot, key)
                 canInteract = function()
                     if not Sync.IsAvailable() then return false end
                     local cropId = Crops.SlotOccupant(zoneKey, index)
+                    local crop = cropId and Crops.Get(cropId)
                     local state = cropId and Crops.InteractionState(cropId)
-                    return state and state.canFertilize or false
+                    return canCare(slot, crop) and state and state.canFertilize or false
                 end,
             },
             {
@@ -173,8 +195,9 @@ local function createSphereZone(slot, key)
                 canInteract = function()
                     if not Sync.IsAvailable() then return false end
                     local cropId = Crops.SlotOccupant(zoneKey, index)
+                    local crop = cropId and Crops.Get(cropId)
                     local state = cropId and Crops.InteractionState(cropId)
-                    return state and state.canWeed or false
+                    return canCare(slot, crop) and state and state.canWeed or false
                 end,
             },
             {
@@ -189,8 +212,9 @@ local function createSphereZone(slot, key)
                 canInteract = function()
                     if not Sync.IsAvailable() then return false end
                     local cropId = Crops.SlotOccupant(zoneKey, index)
+                    local crop = cropId and Crops.Get(cropId)
                     local state = cropId and Crops.InteractionState(cropId)
-                    return state and state.canTreatPests or false
+                    return canCare(slot, crop) and state and state.canTreatPests or false
                 end,
             },
         },
@@ -288,12 +312,18 @@ function Slots.ReplaceFields(fields)
     local wanted = {}
     for _, field in ipairs(fields or {}) do
         for _, slot in ipairs(field.slots or {}) do
+            slot.memberStatus = field.memberStatus
+            slot.reservationStatus = field.reservationStatus
             local key = keyOf(slot.zone, slot.index)
             wanted[key] = true
             if not registered[key] then
                 registered[key] = { zoneId = createSphereZone(slot, key), propKey = propKeyOf(slot.zone, slot.index), slot = slot }
                 refreshProp(slot)
-            else registered[key].slot = slot end
+            else
+                local current = registered[key].slot
+                for name in pairs(current) do current[name] = nil end
+                for name, value in pairs(slot) do current[name] = value end
+            end
         end
     end
     for key, entry in pairs(registered) do

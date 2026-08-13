@@ -31,6 +31,17 @@ Config.Job = {
     NearbyInviteDistance = 15.0,
 }
 
+Config.Gameplay = {
+    ActionFeedback = {
+        plant = { duration = 2500, scenario = 'WORLD_HUMAN_GARDENER_PLANT', prop = 'prop_tool_shovel' },
+        water = { duration = 2000, scenario = 'WORLD_HUMAN_GARDENER_PLANT', prop = 'prop_wateringcan' },
+        harvest = { duration = 3000, scenario = 'WORLD_HUMAN_GARDENER_PLANT' },
+        fertilize = { duration = 2200, scenario = 'WORLD_HUMAN_GARDENER_PLANT' },
+        weed = { duration = 2500, scenario = 'WORLD_HUMAN_GARDENER_PLANT', prop = 'prop_tool_shovel' },
+        treat_pest = { duration = 2200, scenario = 'WORLD_HUMAN_GARDENER_PLANT' },
+    },
+}
+
 Config.Progression = {
     MaxLevel = 20,
     CurveCoefficient = 220,
@@ -74,11 +85,13 @@ Config.Market = {
     TabletCommand = 'farmtablet',
     Markets = {
         { id = 'grapeseed', label = 'Grapeseed Farm Market',
-          coords = vec3(2448.38, 4977.18, 46.81), radius = 1.8,
-          ped = 'a_m_m_farmer_01', heading = 135.0 },
+            coords = vec3(2448.38, 4977.18, 46.81), radius = 1.8,
+            ped = 'a_m_m_farmer_01', heading = 135.0,
+            blip = { enabled = true, sprite = 52, color = 5, scale = 0.75 } },
         { id = 'paleto', label = 'Paleto Farm Market',
-          coords = vec3(-160.12, 6322.47, 31.58), radius = 1.8,
-          ped = 'a_m_m_farmer_01', heading = 315.0 },
+            coords = vec3(-160.12, 6322.47, 31.58), radius = 1.8,
+            ped = 'a_m_m_farmer_01', heading = 315.0,
+            blip = { enabled = true, sprite = 52, color = 5, scale = 0.75 } },
     },
     Stock = {
         plus = { capacity = 20, restockAmount = 5, restockSeconds = 30 * 60 },
@@ -89,7 +102,8 @@ Config.Market = {
 Config.Sell = {
     InteractionDistance = 3.0,
     Buyer = { label = 'Grapeseed Produce Buyer', coords = vec3(2441.84, 4968.77, 46.81),
-        radius = 1.8, ped = 's_m_m_dockwork_01', heading = 225.0 },
+        radius = 1.8, ped = 's_m_m_dockwork_01', heading = 225.0,
+        blip = { enabled = true, sprite = 500, color = 25, scale = 0.75 } },
     BasePrices = { carrot = 12, potato = 10, lettuce = 14, tomato = 16 },
     TierMultipliers = { poor = 0.50, standard = 1.00, fine = 1.50, premium = 2.00 },
 }

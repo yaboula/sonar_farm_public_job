@@ -28,8 +28,12 @@ RegisterNUICallback('hub:load', function(data, cb)
 end)
 RegisterNUICallback('hub:dispatch', function(data, cb)
     if not active then return reply(cb, { ok = false, reason = 'invalid_session' }) end
-    local response = lib.callback.await(CALLBACKS.HUB_DISPATCH, false, { nonce = active.nonce, intent = data and data.intent })
+    local intent = data and data.intent or {}
+    local response = lib.callback.await(CALLBACKS.HUB_DISPATCH, false, { nonce = active.nonce, intent = intent })
     if response and response.route then SetNewWaypoint(response.route.x + 0.0, response.route.y + 0.0) end
+    if response and response.ok and (intent.type == 'field.reserve' or intent.type == 'field.extend'
+        or intent.type == 'field.release' or intent.type == 'coop.accept' or intent.type == 'coop.leave'
+        or intent.type == 'coop.revoke') then Sync.RefreshNow() end
     reply(cb, response); if response and response.closeSurface then Hub.Close() end
 end)
 RegisterNUICallback('hub:subscribeField', function(data, cb)
@@ -42,6 +46,9 @@ RegisterNUICallback('hub:close', function(_, cb) reply(cb); Hub.Close() end)
 
 RegisterNetEvent('sonar_farm_publicjob:hubInvalidate', function(payload)
     if active then SendNUIMessage({ type = 'hub:invalidate', payload = payload }) end
+    if payload and (payload.scope == 'field' or payload.scope == 'reservation' or payload.scope == 'coop') then
+        Sync.RefreshNow()
+    end
 end)
 RegisterNetEvent('sonar_farm_publicjob:reservationInvite', function(invite)
     local result = lib.alertDialog({ header = 'Field co-op invitation',
@@ -49,6 +56,7 @@ RegisterNetEvent('sonar_farm_publicjob:reservationInvite', function(invite)
         centered = true, cancel = true, labels = { confirm = 'Accept', cancel = 'Decline' } })
     if result == 'confirm' then
         local response = lib.callback.await('sonar_farm_publicjob:reservation:accept', false, invite.id)
+        if response and response.ok then Sync.RefreshNow() end
         Bridge.Notify(response and response.ok and 'Field invitation accepted.' or response and response.reason or 'Invitation failed.',
             response and response.ok and 'success' or 'error')
     end
