@@ -9,7 +9,7 @@ This is an independent sibling of `sonar_farm`. It does not read, migrate or mod
 - QB-Core, ox_lib, ox_inventory, ox_target and oxmysql.
 - Hub routes: Today, Fields, Market and Sell.
 - Six public Fields: Grapeseed S24/M40/L64 and Paleto S24/M40/L64. The QA Field is hidden unless `Config.Debug` is enabled.
-- Persistent 6/12/24-hour reservations, 15-minute grace, grace surcharge, purge and same-Field cooldown.
+- Persistent 1/3/6/8-hour reservations, an eight-hour remaining-time cap, 15-minute grace, grace surcharge, purge and same-Field cooldown.
 - Co-op invitations with atomic one-reservation membership and `departing` ownership protection.
 - Personal 20-level progression with an idempotent XP ledger.
 - Personal Market, global Plus/Pro stock, one non-stackable tablet and immediate inventory delivery.
@@ -56,6 +56,7 @@ See [API](docs/API.md) for payload and security notes.
 
 ```powershell
 lua tests/run.lua
+lua scripts/simulate_s24.lua
 lua scripts/generate_items.lua --check
 
 cd web
@@ -66,6 +67,8 @@ npm run build
 ```
 
 Run the same typecheck/lint/test/build sequence in `inspection-ui` and `minigames-ui`. The initial release remains `0.1.0`; create `v0.1.0` only after the multi-client FiveM E2E and all world placements are signed off.
+
+Gameplay actions are configured under `Config.Gameplay.ActionFeedback`. The bundled local OGG effects can be reproduced with `scripts/generate_gameplay_audio.py` and a local FFmpeg binary. V3 care balance and its compatibility boundary are documented in [Gameplay balance](docs/GAMEPLAY_BALANCE_V3.md).
 
 ## Provenance
 

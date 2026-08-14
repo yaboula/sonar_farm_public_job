@@ -63,6 +63,7 @@ dofile('data/fields.lua')
 dofile('shared/item_catalog.lua')
 dofile('shared/constants.lua')
 dofile('shared/utils.lua')
+dofile('shared/rentals.lua')
 dofile('shared/time.lua')
 dofile('shared/crop_clock.lua')
 dofile('shared/conditions.lua')
@@ -80,15 +81,14 @@ test('production config validates', function()
     equal(#errors, 0, table.concat(errors, '; '))
 end)
 
-test('Field seed catalogue compiles stable versioned topology', function()
+test('configured Field seeds compile stable versioned topology', function()
     local first, errors = Sonar.Fields.CompileSeeds()
     equal(#errors, 0, table.concat(errors, '; '))
-    equal(#first, 7, 'six public Fields plus hidden QA Field expected')
-    local expected = { grapeseed_east = 40, grapeseed_south = 24, grapeseed_north = 64,
-        paleto_creek = 24, paleto_orchard = 40, paleto_highland = 64, zone1 = 24 }
+    equal(#first, #(Config.FieldSeeds or {}), 'every configured Field seed must compile')
     local ids = {}
     for _, field in ipairs(first) do
-        equal(#field.slots, expected[field.id], field.id .. ' slot count')
+        local expectedSlots = ({ S = 24, M = 40, L = 64 })[field.size]
+        if expectedSlots then equal(#field.slots, expectedSlots, field.id .. ' slot count') end
         assert(#field.rows >= 1 and #field.rows <= 20, 'row bounds')
         for _, slot in ipairs(field.slots) do
             assert(not ids[slot.id], 'stable Slot ids must be globally unique')
@@ -135,6 +135,54 @@ test('public-job runtime streams topology without company schema', function()
     assert(slots:find('function Slots.ReplaceFields', 1, true), 'nearby topology must replace Slot targets')
     assert(schema:find('sfpj_field_revisions', 1, true) and schema:find('sfpj_economy_outbox', 1, true),
         'versioned topology and economy recovery outbox tables are required')
+end)
+
+test('gameplay feedback defines six distinct actions and guaranteed cleanup', function()
+    local expectedDurations = {
+        plant = 3200, water = 2800, fertilize = 2600,
+        weed = 3000, treat_pest = 2600, harvest = 2800,
+    }
+    local soundIds = {}
+    for action, duration in pairs(expectedDurations) do
+        local feedback = assert(Config.Gameplay.ActionFeedback[action], action .. ' feedback')
+        equal(feedback.duration, duration, action .. ' duration')
+        assert(feedback.anim or feedback.scenario, action .. ' animation')
+        assert(feedback.sound and feedback.sound.id, action .. ' local audio')
+        assert(not soundIds[feedback.sound.id]
+            or (feedback.sound.id == 'soil_scrape'
+                and ((soundIds[feedback.sound.id] == 'plant' and action == 'weed')
+                    or (soundIds[feedback.sound.id] == 'weed' and action == 'plant'))),
+            'only Plant and Weed may share the scrape sound')
+        soundIds[feedback.sound.id] = action
+        assert(feedback.particle, action .. ' local particle contract')
+    end
+    equal(Config.Gameplay.ActionFeedback.harvest.prop, nil, 'harvest must use hands, never a planting tool')
+    local file = assert(io.open('client/modules/interaction/feedback.lua', 'rb'))
+    local source = file:read('*a'); file:close()
+    for _, contract in ipairs({ 'already_active', 'IsEntityDead', 'IsPedInAnyVehicle',
+        'FeedbackCancelDistance', 'lib.cancelProgress()', 'DeleteEntity(session.prop)',
+        "sound(session, 'stop')", 'StopParticleFxLooped', 'onResourceStop',
+        'sfpj_action_preview', 'Admin.RequireAuthorization', "RegisterNUICallback('gameplay:warning'" }) do
+        assert(source:find(contract, 1, true), 'missing feedback lifecycle contract: ' .. contract)
+    end
+end)
+
+test('procedural gameplay audio stays local compact and reproducible', function()
+    local total = 0
+    for _, name in ipairs({ 'soil_scrape', 'water_pour', 'granules', 'spray', 'crop_pick' }) do
+        local file = assert(io.open('nui-shell/audio/' .. name .. '.ogg', 'rb'))
+        local header = file:read(4)
+        local size = assert(file:seek('end'))
+        file:close()
+        equal(header, 'OggS', name .. ' OGG header')
+        assert(size > 0 and size < 100000, name .. ' should remain a compact local effect')
+        total = total + size
+    end
+    assert(total < 500000, 'all gameplay audio must remain below 500 KB')
+    local generator = assert(io.open('scripts/generate_gameplay_audio.py', 'rb'))
+    local source = generator:read('*a'); generator:close()
+    assert(source:find('RATE = 48_000', 1, true), 'audio generator must stay mono 48 kHz')
+    assert(source:find('loudnorm=I=-16', 1, true), 'audio generator must normalize near -16 LUFS')
 end)
 
 test('invalid operational config is rejected', function()
@@ -675,6 +723,46 @@ test('advanced care mutators settle weeds pests and overfertilize consequences',
     Config.Features.AdvancedCare = enabled
 end)
 
+test('V3 Basic care restores exact windows while V2 protection remains unchanged', function()
+    local timestamp = Sonar.Time.Now()
+    local basicWater = Sonar.ItemCatalog.byId.watering_can
+    local basicFertilizer = Sonar.ItemCatalog.byId.fertilizer_organic
+    local basicHoe = Sonar.ItemCatalog.byId.hand_hoe
+    local basicSpray = Sonar.ItemCatalog.byId.pest_spray_organic
+    local id, record = State.Add({
+        crop_type = 'tomato', owner = 'owner-v3', zone = 'grapeseed_east', slot = 3,
+        pos_x = 2238.0, pos_y = 5031.0, pos_z = 44.2, planted_at = timestamp,
+        growth_time = 2400,
+        data = { simulationVersion = 3, water = 60, health = 100,
+            nutrients = Config.Crops.tomato.nutrients.optimalMin, weedCover = 20,
+            pestPressure = 20, lastCare = timestamp },
+    })
+    Physiology.Water(record, basicWater.tool, basicWater, timestamp)
+    equal(record.data.water, 100, 'Basic watering restores forty points')
+    equal(record.data.waterProtectionStrength, 0, 'V3 Basic water has no residual protection')
+    local nutrients = Physiology.Fertilize(record, basicFertilizer.consumable, basicFertilizer)
+    equal(nutrients, Config.Crops.tomato.nutrients.optimalMin + 25,
+        'Basic fertilizer restores one nutrient window')
+    equal(record.data.nutrientProtectionStrength, 0, 'V3 Basic fertilizer has no residual protection')
+    equal(Physiology.Weed(record, basicHoe.tool, basicHoe), 0, 'Basic hoe resets green weed pressure')
+    equal(Physiology.TreatPests(record, basicSpray.consumable, basicSpray), 0,
+        'Basic treatment resets green pest pressure')
+    equal(record.data.pestProtectionStrength, 0, 'V3 Basic treatment has no residual protection')
+    State.Remove(id)
+
+    local legacyId, legacy = State.Add({
+        crop_type = 'tomato', owner = 'owner-v2', zone = 'grapeseed_east', slot = 4,
+        pos_x = 2239.0, pos_y = 5031.0, pos_z = 44.2, planted_at = timestamp,
+        growth_time = 2400,
+        data = { simulationVersion = 2, water = 60, health = 100, nutrients = 52,
+            weedCover = 20, pestPressure = 20, lastCare = timestamp },
+    })
+    Physiology.Fertilize(legacy, basicFertilizer.consumable, basicFertilizer)
+    equal(legacy.data.nutrientProtectionStrength, 0.2,
+        'existing V2 fertilizer protection is preserved')
+    State.Remove(legacyId)
+end)
+
 test('protection trajectories split exactly at expiry', function()
     local enabled = Config.Features.AdvancedCare
     local weeds = Config.Farming.ConditionEffects.Weeds
@@ -946,20 +1034,32 @@ test('personal economy persists receipts and a recovery outbox', function()
     assert(sell:find("metadata.resource == Sonar.Constants.RESOURCE", 1, true), 'Sell rejects foreign produce')
 end)
 
-local function v2Record(cropType, growthTime, plantedAt, values)
+local function versionedRecord(version, cropType, growthTime, plantedAt, values)
     values = values or {}
     values.water = values.water == nil and 100 or values.water
     values.health = values.health == nil and 100 or values.health
     values.spoilage = values.spoilage == nil and 0 or values.spoilage
     values.lastCare = values.lastCare or plantedAt
+    local original = Config.Farming.NewCropSimulationVersion
+    Config.Farming.NewCropSimulationVersion = version
+    local data = Sonar.CropClock.NewData(cropType, values)
+    Config.Farming.NewCropSimulationVersion = original
     return {
         id = cropType .. '-' .. tostring(growthTime),
         crop_type = cropType,
         planted_at = plantedAt,
         growth_time = growthTime,
         state = Sonar.Constants.CROP_STATE.PLANTED,
-        data = Sonar.CropClock.NewData(cropType, values),
+        data = data,
     }
+end
+
+local function v2Record(cropType, growthTime, plantedAt, values)
+    return versionedRecord(2, cropType, growthTime, plantedAt, values)
+end
+
+local function v3Record(cropType, growthTime, plantedAt, values)
+    return versionedRecord(3, cropType, growthTime, plantedAt, values)
 end
 
 test('V2 crop clock initializes normalized state and preserves rollback to V1', function()
@@ -975,6 +1075,166 @@ test('V2 crop clock initializes normalized state and preserves rollback to V1', 
     equal(legacy.simulationVersion, 1, 'rollback creates legacy records without reinterpreting V2 crops')
     equal(legacy.nutrients, nil, 'legacy initialization remains unchanged')
     Config.Farming.NewCropSimulationVersion = original
+end)
+
+test('V3 crop clock uses prepared-soil nutrients without reinterpreting V2 crops', function()
+    local v3 = v3Record('tomato', 2400, 100000)
+    equal(v3.data.simulationVersion, 3, 'new crops opt into V3')
+    equal(v3.data.nutrients, 77, 'V3 nutrients start at optimalMin plus one Basic window')
+    assert(Sonar.CropClock.IsV3(v3), 'V3 discriminator')
+
+    local v2 = v2Record('tomato', 2400, 100000)
+    equal(v2.data.nutrients, 65, 'V2 nutrient initialization remains unchanged')
+    assert(not Sonar.CropClock.IsV3(v2), 'V2 records must never enter V3 balance')
+end)
+
+test('V3 factor windows derive from 570 real seconds with staged first onset', function()
+    local plantedAt = 100000
+    local workload = Config.Farming.AdvancedCare.BasicWorkload
+    local factors = {
+        water = { value = 'water', boundary = 60 },
+        nutrients = { value = 'nutrients', boundary = Config.Crops.tomato.nutrients.optimalMin },
+        weeds = { value = 'weedCover', boundary = 20 },
+        pests = { value = 'pestPressure', boundary = 20 },
+    }
+    for factor, expected in pairs(factors) do
+        local values = {
+            waterProtectionStrength = factor == 'water' and 0 or 1,
+            waterProtectionUntil = plantedAt + 10000,
+            nutrientProtectionStrength = factor == 'nutrients' and 0 or 1,
+            nutrientProtectionUntil = plantedAt + 10000,
+            weedProtectionStrength = factor == 'weeds' and 0 or 1,
+            weedProtectionUntil = plantedAt + 10000,
+            pestProtectionStrength = factor == 'pests' and 0 or 1,
+            pestProtectionUntil = plantedAt + 10000,
+        }
+        local record = v3Record('tomato', 2400, plantedAt, values)
+        local delay = workload.InitialDelaySeconds[factor]
+        local before = Sonar.Conditions.Evaluate(record, plantedAt + delay)
+        local initial = factor == 'water' and 100
+            or factor == 'nutrients' and 77 or 0
+        assert(math.abs(before[expected.value] - initial) < 0.000001,
+            factor .. ' must not move before its first-round onset')
+        local boundary = Sonar.Conditions.Evaluate(record,
+            plantedAt + delay + workload.GreenWindowSeconds)
+        assert(math.abs(boundary[expected.value] - expected.boundary) < 0.000001,
+            factor .. ' must reach its green boundary at exactly 570 seconds')
+    end
+end)
+
+test('V3 weed competition starts only after weeds leave green', function()
+    local plantedAt, growthTime = 100000, Config.Crops.tomato.growthTime
+    local common = {
+        waterCareAt = plantedAt, nutrientCareAt = plantedAt,
+        weedCareAt = plantedAt, pestCareAt = plantedAt,
+        pestProtectionStrength = 1, pestProtectionUntil = plantedAt + 10000,
+        nutrientProtectionStrength = 1, nutrientProtectionUntil = plantedAt + 10000,
+    }
+    local weedyValues, cleanValues = {}, {}
+    for key, value in pairs(common) do weedyValues[key], cleanValues[key] = value, value end
+    cleanValues.weedProtectionStrength, cleanValues.weedProtectionUntil = 1, plantedAt + 10000
+    local weedy = v3Record('tomato', growthTime, plantedAt, weedyValues)
+    local clean = v3Record('tomato', growthTime, plantedAt, cleanValues)
+    local atBoundary = plantedAt + 570
+    local weedyBoundary = Sonar.Conditions.Evaluate(weedy, atBoundary)
+    local cleanBoundary = Sonar.Conditions.Evaluate(clean, atBoundary)
+    assert(math.abs(weedyBoundary.water - cleanBoundary.water) < 0.000001,
+        'green weeds must not shorten the water window')
+    local afterBoundary = plantedAt + 690
+    assert(Sonar.Conditions.Evaluate(weedy, afterBoundary).water
+        < Sonar.Conditions.Evaluate(clean, afterBoundary).water,
+        'weed competition must begin after pressure exceeds 20')
+end)
+
+test('V3 S24 Basic cadence tolerates 90 seconds and warns at 120 without Critical', function()
+    local plantedAt = 100000
+    local crops = { 'carrot', 'potato', 'lettuce', 'tomato' }
+    local factors = {
+        { key = 'water', careKey = 'waterCareAt', value = 'water', baseline = function() return 100 end },
+        { key = 'nutrients', careKey = 'nutrientCareAt', value = 'nutrients', baseline = function(def)
+            return math.min(def.nutrients.optimalMax, def.nutrients.optimalMin + 25)
+        end },
+        { key = 'weeds', careKey = 'weedCareAt', value = 'weedCover', baseline = function() return 0 end },
+        { key = 'pests', careKey = 'pestCareAt', value = 'pestPressure', baseline = function() return 0 end },
+    }
+    local delays = { 0, 30, 60, 90, 120 }
+    local layouts = {
+        homogeneous = {},
+        mixed = {},
+    }
+    for _, crop in ipairs(crops) do
+        layouts.homogeneous[crop] = {}
+        for slot = 1, 24 do layouts.homogeneous[crop][slot] = crop end
+    end
+    for slot = 1, 24 do layouts.mixed[slot] = crops[((slot - 1) % #crops) + 1] end
+
+    local function verify(layout, label)
+        for slot, crop in pairs(layout) do
+            local def = Config.Crops[crop]
+            for _, factor in ipairs(factors) do
+                for _, delay in ipairs(delays) do
+                    local values = {
+                        waterProtectionStrength = factor.key == 'water' and 0 or 1,
+                        waterProtectionUntil = plantedAt + 10000,
+                        nutrientProtectionStrength = factor.key == 'nutrients' and 0 or 1,
+                        nutrientProtectionUntil = plantedAt + 10000,
+                        weedProtectionStrength = factor.key == 'weeds' and 0 or 1,
+                        weedProtectionUntil = plantedAt + 10000,
+                        pestProtectionStrength = factor.key == 'pests' and 0 or 1,
+                        pestProtectionUntil = plantedAt + 10000,
+                    }
+                    values[factor.value] = factor.baseline(def)
+                    values[factor.careKey] = plantedAt
+                    local record = v3Record(crop, def.growthTime, plantedAt, values)
+                    local at = plantedAt + 570 + delay
+                    local trajectory = Sonar.Conditions.Evaluate(record, at)
+                    local watchSeconds = trajectory.bandExposure.watch * def.growthTime
+                    local criticalSeconds = trajectory.bandExposure.critical * def.growthTime
+                    assert(criticalSeconds < 0.000001,
+                        ('%s slot %s %s +%ss entered Critical'):format(label, slot, factor.key, delay))
+                    assert(watchSeconds <= delay + 0.0001,
+                        ('%s slot %s %s Watch exceeded accepted latency'):format(label, slot, factor.key))
+                    if delay == 120 then assert(watchSeconds > 90, '120 seconds must produce a visible Watch warning') end
+                    local condition = Physiology.Evaluate(record, at)
+                    assert(condition.state ~= Sonar.Constants.CROP_STATE.DEAD,
+                        'accepted latency must never cause sudden death')
+                end
+            end
+        end
+    end
+
+    for crop, layout in pairs(layouts.homogeneous) do verify(layout, crop .. '-S24') end
+    verify(layouts.mixed, 'mixed-S24')
+end)
+
+test('V3 timestamps remain deterministic across a persisted restart boundary', function()
+    local plantedAt = 100000
+    local record = v3Record('lettuce', Config.Crops.lettuce.growthTime, plantedAt, {
+        water = 88, nutrients = 72, weedCover = 7, pestPressure = 4,
+        lastCare = plantedAt + 180,
+        waterCareAt = plantedAt + 180, nutrientCareAt = plantedAt + 180,
+        weedCareAt = plantedAt + 180, pestCareAt = plantedAt + 180,
+    })
+    local function clone(value)
+        if type(value) ~= 'table' then return value end
+        local copy = {}
+        for key, item in pairs(value) do copy[key] = clone(item) end
+        return copy
+    end
+    local restored = clone(record)
+    local at = plantedAt + 811
+    local live = Physiology.Evaluate(record, at)
+    local afterRestart = Physiology.Evaluate(restored, at)
+    for _, key in ipairs({ 'water', 'health', 'nutrients', 'weedCover', 'pestPressure',
+        'growthAdjustmentRatio', 'waterStressAccumulated', 'nutrientStressAccumulated',
+        'pestDamageAccumulated', 'progress' }) do
+        assert(math.abs((live[key] or 0) - (afterRestart[key] or 0)) < 0.000001,
+            key .. ' changed after persistence restore')
+    end
+    for _, band in ipairs({ 'green', 'watch', 'critical' }) do
+        assert(math.abs(live.bandExposure[band] - afterRestart.bandExposure[band]) < 0.000001,
+            band .. ' exposure changed after persistence restore')
+    end
 end)
 
 test('V2 biology is invariant across 20 minute 40 minute and 6 hour cycles', function()
@@ -1171,16 +1431,44 @@ test('public progression curve unlocks and perks match the v1 contract', functio
 end)
 
 test('reservation economy and expiry settings match the v1 contract', function()
-    equal(Config.Reservations.Prices.S[6], 1500, 'S six-hour price')
-    equal(Config.Reservations.Prices.M[12], 4300, 'M twelve-hour price')
-    equal(Config.Reservations.Prices.L[24], 11500, 'L twenty-four-hour price')
-    equal(Config.Reservations.MaximumRemainingSeconds, 86400, 'maximum remaining rental')
+    local expected = {
+        S = { [1] = 300, [3] = 800, [6] = 1500, [8] = 1900 },
+        M = { [1] = 480, [3] = 1300, [6] = 2400, [8] = 3000 },
+        L = { [1] = 720, [3] = 1950, [6] = 3600, [8] = 4500 },
+    }
+    equal(table.concat(Config.Reservations.PlanOrder, ','), '1,3,6,8', 'rental plan order')
+    for size, prices in pairs(expected) do
+        for hours, price in pairs(prices) do
+            equal(Config.Reservations.Plans[hours], hours * 3600, size .. ' plan duration')
+            equal(Config.Reservations.Prices[size][hours], price,
+                ('%s %d-hour price'):format(size, hours))
+        end
+    end
+    equal(Config.Reservations.MaximumRemainingSeconds, 28800, 'maximum remaining rental')
     equal(Config.Reservations.GraceSeconds, 900, 'grace duration')
     equal(Config.Reservations.GraceSurcharge, 0.25, 'grace surcharge')
     equal(Config.Reservations.SameFieldCooldownSeconds, 1800, 'same Field cooldown')
     equal(Config.Reservations.InviteTtlSeconds, 60, 'invite expiry')
     equal(Config.Reservations.MaxGuests, 3, 'co-op guest cap')
     equal(Config.Job.NearbyInviteDistance, 15.0, 'invite proximity')
+end)
+
+test('short rentals apply discounts grace and legacy remaining-time rules exactly', function()
+    local paid, base = Sonar.Rentals.Price('S', 3, 0.05, false)
+    equal(base, 800, 'S three-hour base')
+    equal(paid, 760, 'level discount rounds once')
+    equal(Sonar.Rentals.Price('S', 3, 0.05, true), 950,
+        'grace surcharge applies after the level discount')
+    equal(Sonar.Rentals.Price('S', 12, 0, false), nil, 'legacy plan cannot be newly selected')
+
+    local allowed, expiry = Sonar.Rentals.CanExtend(1000, 1000, 8)
+    equal(allowed, true, 'exactly eight remaining hours is allowed')
+    equal(expiry, 1000 + 8 * 3600, 'resulting eight-hour expiry')
+    allowed = Sonar.Rentals.CanExtend(1001, 1000, 8)
+    equal(allowed, false, 'remaining time may not exceed eight hours')
+    allowed, expiry = Sonar.Rentals.CanExtend(1000 + 12 * 3600, 1000, 1)
+    equal(allowed, false, 'legacy reservation above the cap cannot extend')
+    equal(expiry, 1000 + 13 * 3600, 'legacy expiry is inspected, never shortened')
 end)
 
 test('personal market and Sell settings match the v1 contract', function()

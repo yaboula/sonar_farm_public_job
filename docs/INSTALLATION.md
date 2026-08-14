@@ -70,7 +70,14 @@ Diagnostic commands are registered only while `Config.Debug = true` and still re
 - `/sfpj_setxp <citizenid> <xp>`
 - `/sfpj_reconcile`
 - `/sfpj_activate_field <field-id> <revision-id>`
+- `/sfpj_action_preview <plant|water|fertilize|weed|treat_pest|harvest>`
+
+## Gameplay checkpoint
+
+The supported rental keys are exactly `1`, `3`, `6` and `8`, with `MaximumRemainingSeconds = 28800`. Do not restore the old 12/24-hour keys: existing database reservations continue to their original expiry without needing those plans in configuration.
+
+Action audio is shipped as local NUI OGG files and adds no server dependency. Before production, use the ACE-protected preview command to approve every configured clip and prop offset on freemode male and female characters. Keep `Config.Debug = false` for players.
 
 ## Start order and smoke test
 
-After first start, confirm the console reports `Sonar Farm Public Job ready`, schema validation reports no missing table/column, the `sfpj_schema_migrations` row exists, and all six public Fields appear in the Hub and map. Test Market and Sell with a real on-duty farmer before opening access to players.
+After first start, confirm the console reports `Sonar Farm Public Job ready`, schema validation reports no missing table/column, the `sfpj_schema_migrations` row exists, and all six public Fields appear in the Hub and map. Test every 1/3/6/8-hour plan, a complete S24 Basic care round, Market and Sell with a real on-duty farmer before opening access to players.

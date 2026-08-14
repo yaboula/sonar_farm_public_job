@@ -1,12 +1,12 @@
 import type { HubAdapter, HubContextModel, HubViewModel, HubViewRequest, IntentResult } from "../types";
-declare global { interface Window { GetParentResourceName?: () => string } }
+declare global { interface Window { GetParentResourceName?: () => string; invokeNative?: unknown } }
 type Response<T> = { ok: boolean; data?: T; reason?: string; message?: string };
 export function isNuiRuntime() {
   try {
     return typeof window.GetParentResourceName === "function" ||
       typeof window.parent?.GetParentResourceName === "function" ||
-      (window as any).invokeNative !== undefined ||
-      ((window.parent as any)?.invokeNative !== undefined);
+      window.invokeNative !== undefined ||
+      window.parent?.invokeNative !== undefined;
   } catch {
     return false;
   }

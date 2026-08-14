@@ -2,7 +2,8 @@
 
 ## Automated
 
-- [x] 46+ Lua tests pass (51 current).
+- [x] 46+ Lua tests pass (60 current).
+- [x] Deterministic V3 S24 simulation passes homogeneous and mixed crops at 0/30/60/90/120-second latency.
 - [x] 97 web tests pass; web typecheck, lint and production build pass.
 - [x] 11 minigame tests pass; typecheck, lint and build pass while the feature remains disabled.
 - [x] 8 Inspection tests pass; typecheck, lint, production contract and build pass.
@@ -21,6 +22,8 @@
 - [ ] Full inventory and insufficient bank balance do not lose money or stock.
 - [ ] Duplicate Sell operation IDs cannot pay twice; foreign/transferred produce is rejected.
 - [ ] Resource restart recovers active/grace reservations, crops and pending operations.
+- [ ] New reservations expose only 1/3/6/8-hour plans and never accumulate beyond eight hours.
+- [ ] A legacy reservation with more than eight hours remaining is not shortened and cannot extend.
 
 ## World and performance
 
@@ -31,6 +34,9 @@
 - [ ] No topology overlap; L64 culling, prop pool and target counts remain stable.
 - [ ] Hub and crop rendering are checked at 720p, 1080p and ultrawide.
 - [ ] Client/server resmon and FPS are acceptable with a full L64 Field.
+- [ ] All six action clips are approved on freemode male/female; props do not clip or duplicate scenario props.
+- [ ] Cancel, death, distance, vehicle, duty loss and resource stop remove every action prop, sound and particle.
+- [ ] Local action audio is restrained, non-stacking and inaudible at inappropriate distance.
 
 ## Release
 

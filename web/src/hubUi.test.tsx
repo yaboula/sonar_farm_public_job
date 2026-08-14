@@ -87,8 +87,8 @@ describe("public-job Hub visual contract", () => {
     await user.click(screen.getByRole("button", { name: "Manage Your Field" }));
     await screen.findByRole("heading", { name: "South Fields" });
     expect(screen.getByRole("region", { name: "South Fields topology" })).toBeVisible();
-    await user.click(screen.getByRole("button", { name: /6 hours/ }));
-    const dialog = screen.getByRole("dialog", { name: "Extend for 6 hours?" });
+    await user.click(screen.getByRole("button", { name: /1 hour/ }));
+    const dialog = screen.getByRole("dialog", { name: "Extend for 1 hour?" });
     expect(dialog).toBeVisible();
     expect(within(dialog).getByText("New expiry")).toBeVisible();
     expect(within(dialog).getByText("Bank after")).toBeVisible();
@@ -113,11 +113,11 @@ describe("public-job Hub visual contract", () => {
     expect(screen.getByRole("button", { name: /Extend During Grace/ })).toBeVisible();
   });
 
-  it("renders a first topology row immediately and disables extensions past the 24-hour cap", async () => {
+  it("renders a first topology row immediately and disables extensions past the 8-hour cap", async () => {
     renderHub("/fields/grapeseed_south");
     await screen.findByRole("heading", { name: "South Fields" });
     expect(screen.getByText("6 visible slots")).toBeVisible();
-    expect(screen.getByRole("button", { name: /24 hours/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /8 hours/ })).toBeDisabled();
     expect(screen.getByText("Allowed crops")).toBeVisible();
   });
 
@@ -142,14 +142,14 @@ describe("public-job Hub visual contract", () => {
     const guest = renderHub("/fields/grapeseed_south");
     await screen.findByRole("heading", { name: "South Fields" });
     expect(screen.getByText("Only the reservation owner can extend this Field.")).toBeVisible();
-    expect(screen.getByRole("button", { name: /6 hours/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /1 hour/ })).toBeDisabled();
     guest.unmount();
 
     window.history.replaceState({}, "", "/");
     renderHub("/fields/paleto_creek");
     await screen.findByRole("heading", { name: "Creek Plot" });
     expect(screen.getByText("You already participate in another Field.")).toBeVisible();
-    expect(screen.getByRole("button", { name: /6 hours/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /1 hour/ })).toBeDisabled();
   });
 
   it("reloads the active view when the server invalidates Hub data", async () => {

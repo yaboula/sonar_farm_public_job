@@ -12,7 +12,7 @@ describe("public-job v1 contract", () => {
   it.each(Array.from({ length: 19 }, (_, index) => index + 1))("keeps XP thresholds monotonic from level %i", level => {
     expect(levelThreshold(level + 1)).toBeGreaterThan(levelThreshold(level));
   });
-  it.each((["S", "M", "L"] as const).flatMap(size => ([6, 12, 24] as const).map(hours => [size, hours] as const)))(
+  it.each((["S", "M", "L"] as const).flatMap(size => ([1, 3, 6, 8] as const).map(hours => [size, hours] as const)))(
     "defines a positive %s/%ih rental", (size, hours) => expect(RENT_PRICES[size][hours]).toBeGreaterThan(0));
   it.each(Object.entries(PRODUCE_PRICES))("defines the %s Standard sale price", (_crop, price) => expect(price).toBeGreaterThan(0));
   it.each(Object.entries(QUALITY_MULTIPLIERS))("defines the %s quality multiplier", (_tier, multiplier) => expect(multiplier).toBeGreaterThan(0));
