@@ -4,11 +4,11 @@ All payments use the player's personal QB bank account.
 
 ## Rentals
 
-- S: $1,500 / $2,700 / $4,800 for 6/12/24 hours.
-- M: $2,400 / $4,300 / $7,600.
-- L: $3,600 / $6,500 / $11,500.
+- S: $300 / $800 / $1,500 / $1,900 for 1/3/6/8 hours.
+- M: $480 / $1,300 / $2,400 / $3,000.
+- L: $720 / $1,950 / $3,600 / $4,500.
 
-Level discounts are 5% at L5, 12% at L10, 18% at L15 and 25% at L20. Grace extensions add 25% after the level discount. Expiry may never be accumulated beyond 24 hours from the current server time.
+Level discounts are 5% at L5, 12% at L10, 18% at L15 and 25% at L20. Grace extensions add 25% after the level discount. Expiry may never be accumulated beyond eight hours from the current server time. Existing 12/24-hour reservations are not shortened or refunded; while more than eight hours remain, every extension is rejected.
 
 ## Market
 

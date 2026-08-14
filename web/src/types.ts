@@ -33,7 +33,7 @@ export interface Reservation {
 }
 
 export interface RentPlan {
-  hours: 6 | 12 | 24;
+  hours: 1 | 3 | 6 | 8;
   basePrice: number;
   price: number;
   graceSurcharge: boolean;

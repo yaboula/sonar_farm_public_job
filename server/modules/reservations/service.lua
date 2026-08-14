@@ -29,16 +29,13 @@ local function playerCoords(source)
 end
 
 local function price(sizeClass, hours, level, grace)
-    local base = Config.Reservations.Prices[sizeClass] and Config.Reservations.Prices[sizeClass][hours]
-    if not base then return nil end
     local perks = Progression.Perks(level)
-    local discounted = math.floor(base * (1 - perks.rentDiscount) + 0.5)
-    return grace and math.floor(discounted * (1 + Config.Reservations.GraceSurcharge) + 0.5) or discounted, base
+    return Sonar.Rentals.Price(sizeClass, hours, perks.rentDiscount, grace)
 end
 
 function Reservations.PricePlans(sizeClass, level, grace)
     local output = {}
-    for _, hours in ipairs({ 6, 12, 24 }) do
+    for _, hours in ipairs(Config.Reservations.PlanOrder or { 1, 3, 6, 8 }) do
         local paid, base = price(sizeClass, hours, level, grace)
         output[#output + 1] = { hours = hours, basePrice = base, price = paid, graceSurcharge = grace == true }
     end
@@ -184,9 +181,8 @@ function Reservations.Extend(source, hours, operationId)
             return { ok = false, reason = 'reservation_inactive' }
         end
         local timestamp = now()
-        local currentExpiry = math.max(timestamp, tonumber(reservation.expires_at) or timestamp)
-        local newExpiry = currentExpiry + Config.Reservations.Plans[hours]
-        if newExpiry > timestamp + Config.Reservations.MaximumRemainingSeconds then
+        local allowed, newExpiry = Sonar.Rentals.CanExtend(reservation.expires_at, timestamp, hours)
+        if not allowed then
             return { ok = false, reason = 'maximum_expiry' }
         end
         local field, progress = Fields.Get(reservation.field_id), Progression.Get(actor.identifier)

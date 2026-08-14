@@ -8,11 +8,11 @@ const progression = {
   unlocks: { plus: true, pro: false, medium: true, large: false },
 };
 
-const plan = (hours: 6 | 12 | 24, basePrice: number) => ({ hours, basePrice, price: Math.round(basePrice * 0.95), graceSurcharge: false });
+const plan = (hours: 1 | 3 | 6 | 8, basePrice: number) => ({ hours, basePrice, price: Math.round(basePrice * 0.95), graceSurcharge: false });
 const plans = {
-  S: [plan(6, 1500), plan(12, 2700), plan(24, 4800)],
-  M: [plan(6, 2400), plan(12, 4300), plan(24, 7600)],
-  L: [plan(6, 3600), plan(12, 6500), plan(24, 11500)],
+  S: [plan(1, 300), plan(3, 800), plan(6, 1500), plan(8, 1900)],
+  M: [plan(1, 480), plan(3, 1300), plan(6, 2400), plan(8, 3000)],
+  L: [plan(1, 720), plan(3, 1950), plan(6, 3600), plan(8, 4500)],
 };
 
 const fieldSeed: PublicField[] = [
@@ -110,7 +110,7 @@ class FixtureAdapter implements HubAdapter {
     const detailReservationValue = detailReservation(selected);
     const now = Math.floor(Date.now() / 1000);
     const expiryBase = detailReservationValue?.fieldId === selected.id ? Math.max(now, detailReservationValue.expiresAt) : now;
-    const detailPlans = selected.rentPlans.map((item) => ({ ...item, resultingExpiresAt: expiryBase + item.hours * 3600, available: expiryBase + item.hours * 3600 <= now + 24 * 3600 }));
+    const detailPlans = selected.rentPlans.map((item) => ({ ...item, resultingExpiresAt: expiryBase + item.hours * 3600, available: expiryBase + item.hours * 3600 <= now + 8 * 3600 }));
     const detail: FieldDetailData = { field: detailedField(selected), reservation: detailReservationValue, progression, rentPlans: detailPlans, bankBalance };
     const currentFields = { ...fields, reservation: detailReservation(fieldSeed[0]) };
     const currentToday = { ...today, reservation: currentFields.reservation, ownCrops: currentFields.reservation?.ownCrops ?? 0 };

@@ -368,9 +368,9 @@ function Fields.LoadDetail(source, fieldId)
     local extensionBase = ownReservation and math.max(timestamp, tonumber(ownReservation.expiresAt) or timestamp)
         or timestamp
     for _, plan in ipairs(rentPlans) do
-        plan.resultingExpiresAt = extensionBase + Config.Reservations.Plans[plan.hours]
-        plan.available = not ownReservation
-            or plan.resultingExpiresAt <= timestamp + Config.Reservations.MaximumRemainingSeconds
+        local allowed, resultingExpiry = Sonar.Rentals.CanExtend(extensionBase, timestamp, plan.hours)
+        plan.resultingExpiresAt = resultingExpiry
+        plan.available = not ownReservation or allowed
     end
     return { field = { id = field.id, name = field.name, location = field.location, region = field.region,
         sizeClass = field.sizeClass, access = field.access, rows = field.rows, slots = field.slots,

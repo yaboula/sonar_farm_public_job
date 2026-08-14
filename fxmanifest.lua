@@ -14,7 +14,7 @@ shared_scripts {
     '@ox_lib/init.lua',
     '@prism_uipack/lib_override.lua',
     'config/config.lua', 'config/crops.lua', 'config/zones.lua', 'config/minigames.lua',
-    'data/fields.lua', 'shared/item_catalog.lua', 'shared/constants.lua', 'shared/utils.lua',
+    'data/fields.lua', 'shared/item_catalog.lua', 'shared/constants.lua', 'shared/utils.lua', 'shared/rentals.lua',
     'shared/time.lua', 'shared/crop_clock.lua', 'shared/conditions.lua', 'shared/growth.lua',
     'shared/physiology.lua', 'shared/inspection.lua', 'shared/zones.lua', 'shared/fields.lua',
     'shared/config_validation.lua', 'bridge/bridge.lua', 'bridge/frameworks/qbcore.lua',

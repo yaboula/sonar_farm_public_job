@@ -71,7 +71,7 @@ export function TodayView() {
           <div className="assignment-actions"><button className="secondary-icon-button" type="button" onClick={() => void setFieldRoute()} aria-label="Mark route to your Field"><MapPin size={21} /></button><button className="primary-button" type="button" onClick={() => navigate(`/fields/${reservation.fieldId}`)}>{reservation.status === "grace" ? "Extend During Grace" : "Open Field Control"}<ArrowRight size={24} /></button></div>
         </> : <>
           <div className="assignment-main"><Plant className="assignment-icon" size={76} weight="thin" /><div className="assignment-copy"><span>Public Fields available</span><h2>Reserve your next Field</h2><p>Choose a complete S, M or L Field in Grapeseed or Paleto.</p><strong>Rental time continues while offline</strong></div></div>
-          <div className="related-order"><Clock size={23} /><span>6, 12 or 24 hour plans</span><i>·</i><span>Your level discount applies automatically</span></div>
+          <div className="related-order"><Clock size={23} /><span>1, 3, 6 or 8 hour plans</span><i>·</i><span>Your level discount applies automatically</span></div>
           <button className="primary-button" type="button" onClick={() => navigate("/fields")}>Browse Public Fields<ArrowRight size={24} /></button>
         </>}
       </article>

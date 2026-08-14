@@ -11,7 +11,7 @@ const messages: Record<string, string> = {
   level_required: "Your farming level does not unlock this option.",
   field_unavailable: "That Field was reserved by another farmer.",
   field_cooldown: "Your same-Field cooldown is still active.",
-  maximum_expiry: "A reservation cannot extend beyond 24 hours from now.",
+  maximum_expiry: "A reservation cannot extend beyond 8 hours from now.",
   stock_unavailable: "Global stock changed before checkout. Your cart was kept.",
   insufficient_funds: "Your personal bank balance is insufficient.",
   inventory_full: "Your inventory cannot receive the complete order.",

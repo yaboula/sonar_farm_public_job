@@ -530,14 +530,27 @@ local function validatePublicJob(errors)
     end
 
     local reservations = Config.Reservations or {}
-    for _, hours in ipairs({ 6, 12, 24 }) do
+    local expectedPlans = { 1, 3, 6, 8 }
+    if type(reservations.PlanOrder) ~= 'table' or #reservations.PlanOrder ~= #expectedPlans then
+        errors[#errors + 1] = 'Config.Reservations.PlanOrder must contain 1, 3, 6 and 8 hours.'
+    end
+    for index, hours in ipairs(expectedPlans) do
+        if reservations.PlanOrder and reservations.PlanOrder[index] ~= hours then
+            errors[#errors + 1] = 'Config.Reservations.PlanOrder must be ordered 1, 3, 6, 8.'
+        end
         positive(errors, ('Config.Reservations.Plans.%d'):format(hours), reservations.Plans and reservations.Plans[hours], false)
+        if reservations.Plans and reservations.Plans[hours] ~= hours * 3600 then
+            errors[#errors + 1] = ('Config.Reservations.Plans.%d must equal %d seconds.'):format(hours, hours * 3600)
+        end
         for _, size in ipairs({ 'S', 'M', 'L' }) do
             positive(errors, ('Config.Reservations.Prices.%s.%d'):format(size, hours),
                 reservations.Prices and reservations.Prices[size] and reservations.Prices[size][hours], false)
         end
     end
     positive(errors, 'Config.Reservations.MaximumRemainingSeconds', reservations.MaximumRemainingSeconds, false)
+    if reservations.MaximumRemainingSeconds ~= 8 * 3600 then
+        errors[#errors + 1] = 'Config.Reservations.MaximumRemainingSeconds must be eight hours.'
+    end
     positive(errors, 'Config.Reservations.GraceSeconds', reservations.GraceSeconds, false)
     range(errors, 'Config.Reservations.GraceSurcharge', reservations.GraceSurcharge, 0, 1)
     if reservations.MaxGuests ~= 3 then errors[#errors + 1] = 'Config.Reservations.MaxGuests must be 3.' end
