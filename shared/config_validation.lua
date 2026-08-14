@@ -335,6 +335,37 @@ local function validateAdvancedCare(errors)
         return
     end
 
+    local workload = advanced.BasicWorkload
+    if type(workload) ~= 'table' then
+        errors[#errors + 1] = 'Config.Farming.AdvancedCare.BasicWorkload must be a table.'
+    else
+        positive(errors, 'Config.Farming.AdvancedCare.BasicWorkload.GreenWindowSeconds',
+            workload.GreenWindowSeconds, false)
+        for _, factor in ipairs({ 'water', 'nutrients', 'weeds', 'pests' }) do
+            positive(errors, ('Config.Farming.AdvancedCare.BasicWorkload.InitialDelaySeconds.%s'):format(factor),
+                workload.InitialDelaySeconds and workload.InitialDelaySeconds[factor], true)
+            positive(errors, ('Config.Farming.AdvancedCare.BasicWorkload.GreenDelta.%s'):format(factor),
+                workload.GreenDelta and workload.GreenDelta[factor], false)
+        end
+        local expectedDelays = { water = 0, nutrients = 120, weeds = 240, pests = 360 }
+        local expectedDeltas = { water = 40, nutrients = 25, weeds = 20, pests = 20 }
+        if workload.GreenWindowSeconds ~= 570 then
+            errors[#errors + 1] = 'Config.Farming.AdvancedCare.BasicWorkload.GreenWindowSeconds must be 570 for V3.'
+        end
+        for factor, expected in pairs(expectedDelays) do
+            if workload.InitialDelaySeconds and workload.InitialDelaySeconds[factor] ~= expected then
+                errors[#errors + 1] = ('Config.Farming.AdvancedCare.BasicWorkload.InitialDelaySeconds.%s must be %d.')
+                    :format(factor, expected)
+            end
+        end
+        for factor, expected in pairs(expectedDeltas) do
+            if workload.GreenDelta and workload.GreenDelta[factor] ~= expected then
+                errors[#errors + 1] = ('Config.Farming.AdvancedCare.BasicWorkload.GreenDelta.%s must be %d.')
+                    :format(factor, expected)
+            end
+        end
+    end
+
     range(errors, 'Config.Farming.AdvancedCare.WaterDeficitThreshold', advanced.WaterDeficitThreshold, 0, 100)
     if not finite(advanced.CriticalStressMultiplier) or advanced.CriticalStressMultiplier < 1 then
         errors[#errors + 1] = 'Config.Farming.AdvancedCare.CriticalStressMultiplier must be at least 1.'

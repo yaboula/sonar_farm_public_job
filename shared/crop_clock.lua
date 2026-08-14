@@ -18,6 +18,10 @@ function CropClock.IsV2(record)
     return CropClock.Version(record) >= 2
 end
 
+function CropClock.IsV3(record)
+    return CropClock.Version(record) >= 3
+end
+
 function CropClock.GrowthSeconds(record)
     return math.max(1, tonumber(record and record.growth_time) or 1)
 end
@@ -71,7 +75,16 @@ function CropClock.NewData(cropType, values)
             and Config.Crops[cropType].nutrients or {}
         local optimalMin = tonumber(nutrients.optimalMin) or 40
         local optimalMax = tonumber(nutrients.optimalMax) or 80
-        if data.nutrients == nil then data.nutrients = (optimalMin + optimalMax) * 0.5 end
+        if data.nutrients == nil then
+            if version >= 3 then
+                local workload = Config.Farming and Config.Farming.AdvancedCare
+                    and Config.Farming.AdvancedCare.BasicWorkload or {}
+                local delta = workload.GreenDelta and tonumber(workload.GreenDelta.nutrients) or 25
+                data.nutrients = math.min(optimalMax, optimalMin + delta)
+            else
+                data.nutrients = (optimalMin + optimalMax) * 0.5
+            end
+        end
         if data.weedCover == nil then data.weedCover = 0 end
         if data.pestPressure == nil then data.pestPressure = 0 end
         if data.growthAdjustmentRatio == nil then data.growthAdjustmentRatio = 0 end

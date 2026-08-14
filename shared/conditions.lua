@@ -180,6 +180,7 @@ local function linearPath(record, fromTime, toTime, startValue, baseRate, direct
     options = options or {}
     local total = Sonar.CropClock.Between(record, fromTime, toTime)
     local growthSeconds = Sonar.CropClock.GrowthSeconds(record)
+    local competitionThreshold = Utils.Clamp(tonumber(options.competitionThreshold) or 0, 0, 99)
     local boundaries = { 0, total }
     local untilTime = tonumber(options.protectionUntil) or 0
     if untilTime > fromTime and untilTime < toTime then
@@ -192,6 +193,7 @@ local function linearPath(record, fromTime, toTime, startValue, baseRate, direct
         if onsetOffset > 0 and onsetOffset < total then boundaries[#boundaries + 1] = onsetOffset end
     end
     pathBoundaries(options.weedPath, boundaries)
+    if options.weedPath then addCrossings(options.weedPath, competitionThreshold, boundaries) end
     boundaries = uniqueSorted(boundaries)
 
     local path = {}
@@ -208,7 +210,9 @@ local function linearPath(record, fromTime, toTime, startValue, baseRate, direct
             local weedMultiplier = 1
             if options.weedPath then
                 local weedAverage = (valueAt(options.weedPath, left) + valueAt(options.weedPath, right)) * 0.5
-                weedMultiplier = 1 + weedAverage / 100 * (tonumber(options.weedCompetition) or 0)
+                local pressure = math.max(0, weedAverage - competitionThreshold)
+                    / math.max(1, 100 - competitionThreshold)
+                weedMultiplier = 1 + pressure * (tonumber(options.weedCompetition) or 0)
             end
             local rate = active and math.max(0, tonumber(baseRate) or 0)
                 * protectionMultiplier * weedMultiplier or 0
@@ -267,6 +271,26 @@ local function cycleCriticalFactor(record, normalizedProgress)
     return 1
 end
 
+local function workloadV3(record)
+    if not Sonar.CropClock.IsV3(record) then return nil end
+    local cfg = advancedConfig().BasicWorkload
+    return type(cfg) == 'table' and cfg or nil
+end
+
+local function workloadRate(record, workload, factor, fallback)
+    if not workload then return fallback end
+    local seconds = math.max(1, tonumber(workload.GreenWindowSeconds) or 570)
+    local delta = workload.GreenDelta and tonumber(workload.GreenDelta[factor]) or 0
+    return math.max(0, delta) * Sonar.CropClock.GrowthSeconds(record) / seconds
+end
+
+local function firstCareOnset(record, workload, factor, caredAt)
+    if not workload or tonumber(caredAt) then return nil end
+    local seconds = workload.InitialDelaySeconds and tonumber(workload.InitialDelaySeconds[factor]) or 0
+    if not seconds or seconds <= 0 then return nil end
+    return Sonar.CropClock.RatioForSeconds(record, seconds)
+end
+
 local function evaluateCycle(record, now)
     local data = record.data or {}
     local def = definitionFor(record) or {}
@@ -281,41 +305,51 @@ local function evaluateCycle(record, now)
     local nutrientParams = def.nutrients or {}
     local nutrientDefault = ((tonumber(nutrientParams.optimalMin) or 40)
         + (tonumber(nutrientParams.optimalMax) or 80)) * 0.5
+    local workload = workloadV3(record)
+    local competitionThreshold = workload and (tonumber(cfg.Pressure and cfg.Pressure.green) or 20) or 0
 
     local weedStart = weedsEnabled and Utils.Clamp(tonumber(data.weedCover) or 0, 0, 100) or 0
     local weedPath, weedCover = linearPath(record, lastCare, now, weedStart,
-        weedsEnabled and cycleDef.weedGrowth or 0, 1, {
+        weedsEnabled and workloadRate(record, workload, 'weeds', cycleDef.weedGrowth or 0) or 0, 1, {
             protectionUntil = data.weedProtectionUntil,
             protectionStrength = data.weedProtectionStrength,
+            onsetRatio = firstCareOnset(record, workload, 'weeds', data.weedCareAt),
         })
 
     local waterStart = Utils.Clamp(tonumber(data.water) or 100, 0, 100)
     local waterPath, water = linearPath(record, lastCare, now, waterStart,
-        cycleDef.waterLoss or 0, -1, {
+        workloadRate(record, workload, 'water', cycleDef.waterLoss or 0), -1, {
             protectionUntil = data.waterProtectionUntil,
             protectionStrength = data.waterProtectionStrength,
             weedPath = weedsEnabled and weedPath or nil,
             weedCompetition = cfg.WeedWaterCompetition,
+            competitionThreshold = competitionThreshold,
+            onsetRatio = firstCareOnset(record, workload, 'water', data.waterCareAt),
         })
 
     local nutrientStart = nutrientsEnabled
         and Utils.Clamp(tonumber(data.nutrients) or nutrientDefault, 0, 100) or 0
     local nutrientPath, nutrients = linearPath(record, lastCare, now, nutrientStart,
-        nutrientsEnabled and cycleDef.nutrientLoss or 0, -1, {
+        nutrientsEnabled and workloadRate(record, workload, 'nutrients', cycleDef.nutrientLoss or 0) or 0, -1, {
             protectionUntil = data.nutrientProtectionUntil,
             protectionStrength = data.nutrientProtectionStrength,
             weedPath = weedsEnabled and weedPath or nil,
             weedCompetition = cfg.WeedNutrientCompetition,
+            competitionThreshold = competitionThreshold,
+            onsetRatio = firstCareOnset(record, workload, 'nutrients', data.nutrientCareAt),
         })
 
     local pestStart = pestsEnabled and Utils.Clamp(tonumber(data.pestPressure) or 0, 0, 100) or 0
+    local pestOnset = workload and firstCareOnset(record, workload, 'pests', data.pestCareAt)
+        or (not workload and (tonumber(cycleDef.pestOnset) or 1) or nil)
     local pestPath, pestPressure = linearPath(record, lastCare, now, pestStart,
-        pestsEnabled and cycleDef.pestGrowth or 0, 1, {
+        pestsEnabled and workloadRate(record, workload, 'pests', cycleDef.pestGrowth or 0) or 0, 1, {
             protectionUntil = data.pestProtectionUntil,
             protectionStrength = data.pestProtectionStrength,
             weedPath = weedsEnabled and weedPath or nil,
             weedCompetition = cfg.PestWeedAcceleration,
-            onsetRatio = tonumber(cycleDef.pestOnset) or 1,
+            competitionThreshold = competitionThreshold,
+            onsetRatio = pestOnset,
         })
 
     local boundaries = { 0, total }

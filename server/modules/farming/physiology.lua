@@ -7,6 +7,13 @@
 
 local Utils = Sonar.Utils
 
+local function resolvedProtectionStrength(record, effect, item)
+    -- Basic defines the exact V3 manual cadence and therefore has no residual
+    -- protection. Keep the authored V2 effect intact for crops already alive.
+    if Sonar.CropClock.IsV3(record) and item and item.tier == 'basic' then return 0 end
+    return Utils.Clamp(tonumber(effect and effect.protectionStrength) or 0, 0, 1)
+end
+
 --- Evaluate and commit the condition into hot state. Call this before any action
 --- that depends on current water/health/state.
 ---@param record table
@@ -94,10 +101,11 @@ function Physiology.Fertilize(record, effect, item)
     local oldStrength = Utils.Clamp(tonumber(data.nutrientProtectionStrength) or 0, 0, 1)
     local oldScore = oldStrength * math.max(0, oldUntil - now)
     local newUntil = now + Sonar.CropClock.ProtectionSeconds(record, effect)
-    local newStrength = Utils.Clamp(tonumber(effect.protectionStrength) or 0, 0, 1)
+    local newStrength = resolvedProtectionStrength(record, effect, item)
     local keepNew = newStrength * math.max(0, newUntil - now) >= oldScore
     State.Update(record.id, { data = {
         nutrients = Utils.Round(nutrients, 1),
+        nutrientCareAt = now,
         overfertilizeExcess = Utils.Round(accumulated, 2),
         nutrientProtectionStrength = keepNew and newStrength or oldStrength,
         nutrientProtectionUntil = keepNew and newUntil or oldUntil,
@@ -114,15 +122,15 @@ end
 ---@return number weedCover
 function Physiology.Weed(record, effect, item)
     local data = record.data or {}
+    item = item or { tier = data.weedProtectionTier, id = data.weedProtectionItem }
     local removal = 55
     local protectionStrength = 0
     if type(effect) == 'table' then
         removal = tonumber(effect.weedRemoval) or 55
-        protectionStrength = tonumber(effect.protectionStrength) or 0
+        protectionStrength = resolvedProtectionStrength(record, effect, item)
     elseif type(effect) == 'number' then
         removal = effect
     end
-    item = item or { tier = data and data.weedProtectionTier, id = data and data.weedProtectionItem }
     local weedCover = Utils.Clamp((tonumber(data.weedCover) or 0) - removal, 0, 100)
 
     local now = Sonar.Time.Now()
@@ -136,6 +144,7 @@ function Physiology.Weed(record, effect, item)
 
     State.Update(record.id, { data = {
         weedCover = Utils.Round(weedCover, 1),
+        weedCareAt = now,
         weedProtectionStrength = keepNew and newStrength or oldStrength,
         weedProtectionUntil = keepNew and newUntil or oldUntil,
         weedProtectionTier = keepNew and item and item.tier or data.weedProtectionTier,
@@ -159,10 +168,11 @@ function Physiology.TreatPests(record, effect, item)
     local oldStrength = Utils.Clamp(tonumber(data.pestProtectionStrength) or 0, 0, 1)
     local oldScore = oldStrength * math.max(0, oldUntil - now)
     local newUntil = now + Sonar.CropClock.ProtectionSeconds(record, effect)
-    local newStrength = Utils.Clamp(tonumber(effect.protectionStrength) or 0, 0, 1)
+    local newStrength = resolvedProtectionStrength(record, effect, item)
     local keepNew = newStrength * math.max(0, newUntil - now) >= oldScore
     State.Update(record.id, { data = {
         pestPressure = Utils.Round(pressure, 1),
+        pestCareAt = now,
         pestProtectionStrength = keepNew and newStrength or oldStrength,
         pestProtectionUntil = keepNew and newUntil or oldUntil,
         pestProtectionTier = keepNew and item.tier or data.pestProtectionTier,
@@ -180,15 +190,15 @@ end
 function Physiology.Water(record, effect, item, now)
     now = now or Sonar.Time.Now()
     local data = record.data or {}
+    item = item or { tier = data.waterProtectionTier, id = data.waterProtectionItem }
     local amount = 100
     local protectionStrength = 0
     if type(effect) == 'table' then
         amount = tonumber(effect.amount) or 100
-        protectionStrength = tonumber(effect.protectionStrength) or 0
+        protectionStrength = resolvedProtectionStrength(record, effect, item)
     elseif type(effect) == 'number' then
         amount = effect
     end
-    item = item or { tier = data and data.waterProtectionTier, id = data and data.waterProtectionItem }
     local newWater = Utils.Clamp((tonumber(data.water) or 0) + amount, 0, 100)
 
     local oldUntil = tonumber(data.waterProtectionUntil) or 0
@@ -202,6 +212,7 @@ function Physiology.Water(record, effect, item, now)
     State.Update(record.id, {
         data = {
             water = newWater,
+            waterCareAt = now,
             waterProtectionStrength = keepNew and newStrength or oldStrength,
             waterProtectionUntil = keepNew and newUntil or oldUntil,
             waterProtectionTier = keepNew and item and item.tier or data.waterProtectionTier,

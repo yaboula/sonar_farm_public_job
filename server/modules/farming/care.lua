@@ -95,8 +95,13 @@ lib.callback.register(CALLBACKS.WATER, function(source, payload)
         if not consumed then return reject(REJECT.MISSING_TOOL) end
 
         local score = Quality.Request(source, ACTIONS.WATER, record)
+        -- V3 Basic is the workload baseline: +40 at the green boundary must
+        -- restore one complete 570-second window. Older simulations retain
+        -- their score-scaled amount exactly, and higher tiers still reward
+        -- their configured performance behavior.
+        local basicV3 = Sonar.CropClock.IsV3(record) and selected.definition.tier == 'basic'
         local waterEff = {
-            amount = (selected.effect.amount or 100) * (waterAmount(score) / 100),
+            amount = (selected.effect.amount or 100) * (basicV3 and 1 or waterAmount(score) / 100),
             protectionHours = selected.effect.protectionHours or 0,
             protectionCycleRatio = selected.effect.protectionCycleRatio or 0,
             protectionStrength = selected.effect.protectionStrength or 0,

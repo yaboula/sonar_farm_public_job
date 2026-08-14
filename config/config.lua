@@ -185,7 +185,7 @@ Config.Security = {
 Config.Cooldowns = { plant = 1000, water = 500, harvest = 1000, fertilize = 750, weed = 750, treat_pest = 750 }
 
 Config.Farming = {
-    NewCropSimulationVersion = 2,
+    NewCropSimulationVersion = 3,
     OwnerOnlyHarvest = true,
     AllowPublicCare = false,
     TheftQualityPenalty = 0.3,
@@ -194,6 +194,11 @@ Config.Farming = {
     Tools = { water = 'watering_can', weed = 'hand_hoe' },
     ConditionEffects = { Nutrients = true, Weeds = true, Pests = true },
     AdvancedCare = {
+        BasicWorkload = {
+            GreenWindowSeconds = 9.5 * 60,
+            InitialDelaySeconds = { water = 0, nutrients = 2 * 60, weeds = 4 * 60, pests = 6 * 60 },
+            GreenDelta = { water = 40, nutrients = 25, weeds = 20, pests = 20 },
+        },
         WaterDeficitThreshold = 35, CriticalStressMultiplier = 1.75,
         WeedWaterCompetition = 0.65, WeedNutrientCompetition = 0.8,
         PestWeedAcceleration = 1.0, PestGrowthPerHour = 200,
