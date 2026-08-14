@@ -42,7 +42,8 @@ server_scripts {
 
 client_scripts {
     'client/main.lua', 'client/modules/render/pool.lua', 'client/modules/render/crops.lua',
-    'client/modules/render/target.lua', 'client/modules/interaction/actions.lua',
+    'client/modules/render/target.lua', 'client/modules/interaction/feedback.lua',
+    'client/modules/interaction/actions.lua',
     'client/modules/minigames/controller.lua', 'client/modules/hub/controller.lua',
     'client/modules/inspection/controller.lua', 'client/modules/zones/slots.lua',
     'client/modules/sync/client.lua', 'client/modules/zones/blips.lua',
@@ -52,7 +53,8 @@ client_scripts {
 
 ui_page 'nui-shell/index.html'
 files {
-    'nui-shell/index.html', 'minigames-ui/dist/index.html', 'minigames-ui/dist/assets/**/*',
+    'nui-shell/index.html', 'nui-shell/audio/*.ogg',
+    'minigames-ui/dist/index.html', 'minigames-ui/dist/assets/**/*',
     'minigames-ui/dist/contracts/**/*', 'inspection-ui/dist/index.html',
     'inspection-ui/dist/assets/**/*', 'web/build/index.html', 'web/build/assets/**/*',
 }

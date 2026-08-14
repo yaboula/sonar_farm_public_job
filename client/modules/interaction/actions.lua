@@ -107,26 +107,7 @@ Actions.HandleRejection = handleRejection
 ---@param action string
 ---@return boolean completed
 local function actionProgress(label, action)
-    local feedback = Config.Gameplay and Config.Gameplay.ActionFeedback
-        and Config.Gameplay.ActionFeedback[action] or {}
-    local options = {
-        duration = tonumber(feedback.duration) or 2000,
-        label = label,
-        position = 'bottom',
-        useWhileDead = false,
-        canCancel = true,
-        disable = { move = true, car = true, combat = true, sprint = true },
-        anim = feedback.scenario and { scenario = feedback.scenario } or nil,
-    }
-    if feedback.prop then
-        options.prop = {
-            model = feedback.prop,
-            bone = 57005,
-            pos = vec3(0.12, 0.02, -0.03),
-            rot = vec3(-80.0, 15.0, 10.0),
-        }
-    end
-    return lib.progressCircle(options)
+    return GameplayFeedback.Run(label, action)
 end
 
 -- ---------------------------------------------------------------------------

@@ -24,6 +24,14 @@
       const frames = { hub: document.getElementById('hub'), minigame: document.getElementById('minigame'), inspection: document.getElementById('inspection') };
       const pending = { hub: [], minigame: [], inspection: [] };
       const ready = { hub: false, minigame: false, inspection: false };
+      const gameplayAudio = new Map();
+      const soundFiles = {
+        soil_scrape: 'audio/soil_scrape.ogg',
+        water_pour: 'audio/water_pour.ogg',
+        granules: 'audio/granules.ogg',
+        spray: 'audio/spray.ogg',
+        crop_pick: 'audio/crop_pick.ogg',
+      };
       for (const [name, frame] of Object.entries(frames)) frame.addEventListener('load', () => {
         ready[name] = true;
         pending[name].splice(0).forEach((message) => frame.contentWindow.postMessage(message, '*'));
@@ -34,10 +42,66 @@
       function activate(name) { surface.dataset.active = name; }
       function close(name) { if (surface.dataset.active === name) delete surface.dataset.active; }
       function hideInspection() { frames.inspection.classList.remove('is-visible'); }
+      function stopGameplaySound(token, fadeMs = 100) {
+        const entry = gameplayAudio.get(token);
+        if (!entry) return;
+        gameplayAudio.delete(token);
+        const start = performance.now();
+        const initial = entry.audio.volume;
+        const fade = (now) => {
+          const ratio = Math.min(1, (now - start) / Math.max(1, fadeMs));
+          entry.audio.volume = Math.max(0, initial * (1 - ratio));
+          if (ratio < 1) requestAnimationFrame(fade);
+          else { entry.audio.pause(); entry.audio.currentTime = 0; }
+        };
+        requestAnimationFrame(fade);
+      }
+      function reportGameplayWarning(message) {
+        const resource = typeof GetParentResourceName === 'function' ? GetParentResourceName() : 'sonar_farm_publicjob';
+        fetch(`https://${resource}/gameplay:warning`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: String(message || 'audio load failed') }),
+        }).catch(() => {});
+      }
+      function handleGameplaySound(payload = {}) {
+        const token = String(payload.token || 'gameplay');
+        if (payload.event === 'stop') return stopGameplaySound(token, Number(payload.fadeMs) || 100);
+        const src = soundFiles[payload.id];
+        if (payload.event !== 'play' || !src) return;
+        stopGameplaySound(token, 40);
+        const audio = new Audio(src);
+        const target = Math.max(0, Math.min(1, Number(payload.volume) || 0));
+        audio.preload = 'auto'; audio.volume = 0; audio.loop = false;
+        gameplayAudio.set(token, { audio });
+        audio.addEventListener('ended', () => gameplayAudio.delete(token), { once: true });
+        const timeout = setTimeout(() => {
+          if (!gameplayAudio.has(token)) return;
+          stopGameplaySound(token, 0);
+          reportGameplayWarning(`${payload.id || 'unknown'} timed out`);
+        }, Math.max(250, Number(payload.loadTimeoutMs) || 2500));
+        audio.play().then(() => {
+          clearTimeout(timeout);
+          if (!gameplayAudio.has(token)) { audio.pause(); audio.currentTime = 0; return; }
+          const start = performance.now();
+          const fade = (now) => {
+            if (!gameplayAudio.has(token)) return;
+            const ratio = Math.min(1, (now - start) / Math.max(1, Number(payload.fadeMs) || 100));
+            audio.volume = target * ratio;
+            if (ratio < 1) requestAnimationFrame(fade);
+          };
+          requestAnimationFrame(fade);
+        }).catch((error) => {
+          clearTimeout(timeout);
+          gameplayAudio.delete(token);
+          reportGameplayWarning(`${payload.id || 'unknown'}: ${error?.message || 'playback failed'}`);
+        });
+      }
       window.addEventListener('message', (event) => {
         const message = event.data;
         if (!message || typeof message.type !== 'string') return;
-        if (message.type.startsWith('tomatoPlant:')) {
+        if (message.type === 'gameplay:sound') {
+          handleGameplaySound(message.payload);
+        } else if (message.type.startsWith('tomatoPlant:')) {
           if (message.type === 'tomatoPlant:close') close('minigame'); else { hideInspection(); activate('minigame'); }
           forward('minigame', message);
         } else if (message.type.startsWith('hub:')) {
@@ -47,6 +111,9 @@
           frames.inspection.classList.toggle('is-visible', message.type !== 'inspection:close');
           forward('inspection', message);
         }
+      });
+      window.addEventListener('beforeunload', () => {
+        for (const token of gameplayAudio.keys()) stopGameplaySound(token, 0);
       });
     </script>
   </body>
