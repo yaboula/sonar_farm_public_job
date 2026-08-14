@@ -94,7 +94,8 @@ function Fields.Reload()
     for _, db in ipairs(rows) do
         local field = {
             id = db.id, legacyZone = db.legacy_zone, name = db.name, location = db.location,
-            region = db.region, sizeClass = db.size_class, catalogVisible = tonumber(db.catalog_visible) == 1,
+            region = db.region, sizeClass = db.size_class,
+            catalogVisible = (db.catalog_visible == 1 or db.catalog_visible == true or tonumber(db.catalog_visible) == 1),
             revisionId = db.active_revision_id,
             topologyRevision = tostring(db.revision_number) .. ':' .. tostring(db.checksum),
             orientation = tonumber(db.orientation) or 0,
@@ -125,6 +126,9 @@ function Fields.Reload()
         active[field.id] = field
         byLegacyZone[field.legacyZone or field.id] = field
     end
+    local keys = {}
+    for k in pairs(active) do keys[#keys + 1] = k end
+    Logger.Info(('Fields.Reload completed: %d active fields [%s]'):format(#rows, table.concat(keys, ', ')), 'fields')
     return true
 end
 
@@ -213,7 +217,15 @@ lib.callback.register(Sonar.Constants.CALLBACKS.FIELD_DRAFT_SAVE, function(sourc
     return revisionId and { ok = true, revisionId = revisionId } or { ok = false, reason = reason }
 end)
 
-function Fields.Get(fieldId) return active[fieldId] end
+function Fields.Get(fieldId)
+    local found = active[fieldId]
+    if not found then
+        local keys = {}
+        for k in pairs(active) do keys[#keys + 1] = k end
+        Logger.Warn(('Fields.Get(%s) failed! Active keys in memory: [%s]'):format(tostring(fieldId), table.concat(keys, ', ')), 'fields')
+    end
+    return found
+end
 function Fields.ByLegacyZone(zone) return byLegacyZone[zone] end
 function Fields.CatalogBlips()
     local catalog = {}
@@ -345,7 +357,7 @@ end
 function Fields.LoadDetail(source, fieldId)
     local overview, reason = Fields.LoadOverview(source)
     if not overview then return nil, reason end
-    local field = active[fieldId]
+    local field = Fields.Get(fieldId)
     if not field or (not field.catalogVisible and not Config.Debug) then return nil, 'field_not_found' end
     local claim = Reservations.GetByField(field.id)
     local ownReservation = overview.reservation and claim and overview.reservation.id == claim.id

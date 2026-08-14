@@ -17,9 +17,11 @@ const messages: Record<string, string> = {
   inventory_full: "Your inventory cannot receive the complete order.",
   inventory_changed: "Your inventory changed before confirmation. Try again.",
   sale_pending: "Produce was accepted; bank credit is queued for reconciliation.",
-  operation_in_progress: "This operation is already being processed.",
+  field_not_found: "Field not found in active catalog.",
+  invalid_plan: "Invalid rental plan selected.",
+  invalid_session: "Session expired. Reopen the tablet.",
 };
 
 export function rejectionMessage(reason: string | undefined, fallback: string) {
-  return reason ? messages[reason] ?? fallback : fallback;
+  return reason ? (messages[reason] ?? `Reservation rejected (${reason}).`) : fallback;
 }

@@ -106,18 +106,30 @@ end)
 lib.callback.register(CALLBACKS.HUB_LOAD, function(source, payload)
     payload = payload or {}
     local session, reason, actor = HubRuntime.Validate(source, payload.nonce)
-    if not session then return { ok = false, reason = reason } end
-    local request, data, dataReason = payload.request or {}
-    if request.kind == 'hub' and request.route == 'today' then data = today(source, actor)
-    elseif request.kind == 'hub' and request.route == 'fields' or request.kind == 'fieldsOverview' then data, dataReason = Fields.LoadOverview(source)
-    elseif request.kind == 'fieldDetail' then data, dataReason = Fields.LoadDetail(source, request.fieldId)
-    elseif request.kind == 'hub' and request.route == 'market' then data, dataReason = Market.Load(source)
-    elseif request.kind == 'hub' and request.route == 'sell' then data, dataReason = Sell.Load(source)
-    elseif request.kind == 'sellPreview' then data, dataReason = Sell.Preview(source, request.selections, request.sellAll)
-    elseif request.kind == 'inviteCandidates' then data, dataReason = Reservations.InviteCandidates(source)
-    else return { ok = true, data = { request = request, state = 'unavailable' } } end
-    if not data then return { ok = true, data = { request = request,
-        state = (dataReason == 'job_required' or dataReason == 'duty_required') and 'restricted' or 'unavailable', reason = dataReason } } end
+    if not session then
+        Logger.Warn(('HUB_LOAD session validation failed for player %s: %s'):format(source, tostring(reason)), 'hub')
+        return { ok = false, reason = reason }
+    end
+    local request = payload.request or {}
+    local ok, data, dataReason = pcall(function()
+        if request.kind == 'hub' and request.route == 'today' then return today(source, actor)
+        elseif request.kind == 'hub' and request.route == 'fields' or request.kind == 'fieldsOverview' then return Fields.LoadOverview(source)
+        elseif request.kind == 'fieldDetail' then return Fields.LoadDetail(source, request.fieldId)
+        elseif request.kind == 'hub' and request.route == 'market' then return Market.Load(source)
+        elseif request.kind == 'hub' and request.route == 'sell' then return Sell.Load(source)
+        elseif request.kind == 'sellPreview' then return Sell.Preview(source, request.selections, request.sellAll)
+        elseif request.kind == 'inviteCandidates' then return Reservations.InviteCandidates(source)
+        end
+        return nil, 'unknown_route'
+    end)
+    if not ok then
+        Logger.Warn(('HUB_LOAD runtime error on %s/%s: %s'):format(tostring(request.kind), tostring(request.route), tostring(data)), 'hub')
+        return { ok = true, data = { request = request, state = 'error', reason = 'server_error' } }
+    end
+    if not data then
+        return { ok = true, data = { request = request,
+            state = (dataReason == 'job_required' or dataReason == 'duty_required') and 'restricted' or 'unavailable', reason = dataReason } }
+    end
     return { ok = true, data = { request = request, state = 'ready', data = data } }
 end)
 

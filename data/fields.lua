@@ -1,85 +1,34 @@
 -- Version-controlled public Field catalogue. MySQL owns active revisions after import.
 
 Config.FieldSeeds = {
+    -- [[ EJEMPLO DE CAMPO (Plantilla) ]]
+    -- Descomenta este bloque y rellena con tus coordenadas reales
+    --[[
     {
-        id = 'grapeseed_south', legacyZone = 'grapeseed_south', name = 'South Fields',
-        location = 'Grapeseed · South farm road', region = 'Grapeseed', sizeClass = 'S',
-        orientation = 0.0, catalogVisible = true, allowedCrops = { 'carrot', 'potato' },
-        access = { x = 2010.0, y = 4900.0, z = 41.0 },
-        grid = { origin = { x = 2010.0, y = 4900.0, z = 41.2 }, rows = 4, cols = 6,
-            spacing = { x = 2.2, y = 2.8 }, heading = 0.0 },
-        blip = { enabled = true, sprite = 496, color = 25, scale = 0.8 },
-    },
-    {
-        id = 'grapeseed_east', legacyZone = 'grapeseed_east', name = 'East Fields',
-        location = 'Grapeseed · East service track', region = 'Grapeseed', sizeClass = 'M',
-        orientation = 0.0, catalogVisible = true, allowedCrops = {},
-        access = { x = 2236.0, y = 5031.0, z = 44.0 },
-        grid = { origin = { x = 2236.0, y = 5031.0, z = 44.2 }, rows = 5, cols = 8,
-            spacing = { x = 2.2, y = 2.8 }, heading = 0.0 },
-        blip = { enabled = true, sprite = 496, color = 25, scale = 0.8 },
-    },
-    {
-        id = 'grapeseed_north', legacyZone = 'grapeseed_north', name = 'North Acre',
-        location = 'Grapeseed · North irrigation road', region = 'Grapeseed', sizeClass = 'L',
-        orientation = 0.0, catalogVisible = true, allowedCrops = {},
-        access = { x = 2148.0, y = 5072.0, z = 46.0 },
-        grid = { origin = { x = 2148.0, y = 5072.0, z = 46.0 }, rows = 8, cols = 8,
-            spacing = { x = 2.2, y = 2.8 }, heading = 0.0 },
-        blip = { enabled = true, sprite = 496, color = 25, scale = 0.8 },
-    },
-    {
-        id = 'paleto_creek', legacyZone = 'paleto_creek', name = 'Creek Plot',
-        location = 'Paleto · Creek approach', region = 'Paleto', sizeClass = 'S',
-        orientation = 8.0, catalogVisible = true, allowedCrops = { 'lettuce', 'potato' },
-        access = { x = -108.0, y = 6208.0, z = 31.0 },
-        grid = { origin = { x = -108.0, y = 6208.0, z = 31.0 }, rows = 4, cols = 6,
-            spacing = { x = 2.2, y = 2.8 }, heading = 8.0 },
-        blip = { enabled = true, sprite = 496, color = 25, scale = 0.8 },
-    },
-    {
-        id = 'paleto_orchard', legacyZone = 'paleto_orchard', name = 'Orchard Rows',
-        location = 'Paleto · Old orchard road', region = 'Paleto', sizeClass = 'M',
-        orientation = 90.0, catalogVisible = true, allowedCrops = {},
-        access = { x = -162.0, y = 6170.0, z = 31.0 },
-        grid = { origin = { x = -162.0, y = 6170.0, z = 31.0 }, rows = 5, cols = 8,
-            spacing = { x = 2.2, y = 2.8 }, heading = 90.0 },
-        blip = { enabled = true, sprite = 496, color = 25, scale = 0.8 },
-    },
-    {
-        id = 'paleto_highland', legacyZone = 'paleto_highland', name = 'Highland Farm',
-        location = 'Paleto · Highland service lane', region = 'Paleto', sizeClass = 'L',
-        orientation = 90.0, catalogVisible = true, allowedCrops = {},
-        access = { x = -218.0, y = 6132.0, z = 31.0 },
-        grid = { origin = { x = -218.0, y = 6132.0, z = 31.0 }, rows = 8, cols = 8,
-            spacing = { x = 2.2, y = 2.8 }, heading = 90.0 },
-        blip = { enabled = true, sprite = 496, color = 25, scale = 0.8 },
-    },
-    {
-        id = 'zone1', legacyZone = 'zone1', name = 'QA Tomato Field',
-        location = 'Grapeseed · Development plot', region = 'QA', sizeClass = 'S',
-        orientation = 109.5, catalogVisible = false, allowedCrops = { 'tomato' },
-        access = { x = 2055.71, y = 4954.00, z = 40.08 },
-        rows = {
-            { slots = {
-                { x=2045.92,y=4966.56,z=40.08,heading=130.8 }, { x=2048.59,y=4963.94,z=40.04,heading=131.5 },
-                { x=2052.00,y=4960.57,z=40.06,heading=135.4 }, { x=2055.07,y=4957.47,z=40.04,heading=135.7 },
-                { x=2059.13,y=4953.41,z=40.02,heading=135.6 }, { x=2061.88,y=4950.68,z=40.06,heading=138.3 },
-                { x=2065.39,y=4947.21,z=40.05,heading=135.7 }, { x=2068.97,y=4943.99,z=40.07,heading=131.4 },
-            } },
-            { slots = {
-                { x=2044.45,y=4965.16,z=40.12,heading=109.5 }, { x=2047.19,y=4962.62,z=40.11,heading=109.5 },
-                { x=2050.48,y=4959.17,z=40.10,heading=109.5 }, { x=2053.62,y=4955.85,z=40.10,heading=109.5 },
-                { x=2057.59,y=4951.96,z=40.09,heading=109.5 }, { x=2060.56,y=4949.31,z=40.10,heading=109.5 },
-                { x=2063.88,y=4945.80,z=40.10,heading=109.5 }, { x=2067.38,y=4942.58,z=40.11,heading=109.5 },
-            } },
-            { slots = {
-                { x=2066.21,y=4940.96,z=40.11,heading=109.5 }, { x=2062.69,y=4944.23,z=40.07,heading=109.5 },
-                { x=2059.23,y=4947.66,z=40.09,heading=109.5 }, { x=2056.40,y=4950.47,z=40.09,heading=109.5 },
-                { x=2052.29,y=4954.51,z=40.09,heading=109.5 }, { x=2048.97,y=4957.67,z=40.09,heading=109.5 },
-                { x=2046.11,y=4960.66,z=40.09,heading=109.5 }, { x=2043.08,y=4963.62,z=40.12,heading=109.5 },
-            } },
+        id = 'mi_campo_01',             -- ID único del campo en la base de datos (sin espacios)
+        legacyZone = 'mi_campo_01',     -- Mismo ID
+        name = 'Campo Central',         -- Nombre visible para los jugadores en la Tablet
+        location = 'Granja Los Santos', -- Ubicación visible en la Tablet
+        region = 'Los Santos',          -- Región (Ej: Paleto, Grapeseed, Los Santos)
+        sizeClass = 'S',                -- Tamaño: 'S' (Pequeño), 'M' (Mediano), 'L' (Grande)
+        orientation = 0.0,              -- Orientación general visual
+        catalogVisible = true,          -- true para que aparezca en el mercado de reservas
+        allowedCrops = { 'carrot', 'potato', 'lettuce', 'tomato' }, -- Cultivos permitidos (vacío {} para permitir todos)
+        
+        -- Coordenada del punto de acceso (Donde se asume la entrada al campo)
+        access = { x = 0.0, y = 0.0, z = 0.0 },
+        
+        -- Cuadrícula (Grid) donde aparecerán físicamente las plantas
+        grid = { 
+            origin = { x = 0.0, y = 0.0, z = 0.0 }, -- Coordenada de origen (donde empieza la cuadrícula)
+            rows = 4,                               -- Número de filas de plantas
+            cols = 6,                               -- Número de columnas de plantas
+            spacing = { x = 2.2, y = 2.8 },         -- Espacio (en metros) entre plantas en x e y
+            heading = 0.0                           -- Rotación (heading) de toda la cuadrícula
         },
-        blip = { enabled = Config.Debug == true, sprite = 496, color = 25, scale = 0.8 },
-    },
+        
+        -- Blip en el mapa
+        blip = { enabled = true, sprite = 496, color = 25, scale = 0.8 },
+    }
+    ]]
 }

@@ -1,4 +1,4 @@
-fx_version 'cerulean'
+fx_version 'cerulean' -- Forcing cache refresh
 game 'gta5'
 lua54 'yes'
 
@@ -12,6 +12,7 @@ dependencies { 'qb-core', 'ox_lib', 'ox_inventory', 'ox_target', 'oxmysql' }
 
 shared_scripts {
     '@ox_lib/init.lua',
+    '@prism_uipack/lib_override.lua',
     'config/config.lua', 'config/crops.lua', 'config/zones.lua', 'config/minigames.lua',
     'data/fields.lua', 'shared/item_catalog.lua', 'shared/constants.lua', 'shared/utils.lua',
     'shared/time.lua', 'shared/crop_clock.lua', 'shared/conditions.lua', 'shared/growth.lua',

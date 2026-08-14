@@ -99,20 +99,41 @@ end
 
 function Reservations.Reserve(source, fieldId, hours, operationId)
     local actor, reason = PublicJob.Guard(source)
-    if not actor then return { ok = false, reason = reason } end
+    if not actor then
+        Logger.Warn(('Reserve failed: PublicJob.Guard rejected (reason=%s)'):format(tostring(reason)), 'reservations')
+        return { ok = false, reason = reason }
+    end
     local field = Fields.Get(tostring(fieldId or ''))
     hours = tonumber(hours)
     operationId = tostring(operationId or Sonar.Utils.Uuid())
-    if not field or not field.catalogVisible then return { ok = false, reason = 'field_not_found' } end
-    if not Config.Reservations.Plans[hours] then return { ok = false, reason = 'invalid_plan' } end
+    if not field or (not field.catalogVisible and not Config.Debug) then
+        Logger.Warn(('Reserve failed: field_not_found (fieldId=%s, catalogVisible=%s)'):format(tostring(fieldId), tostring(field and field.catalogVisible)), 'reservations')
+        return { ok = false, reason = 'field_not_found' }
+    end
+    if not Config.Reservations.Plans[hours] then
+        Logger.Warn(('Reserve failed: invalid_plan (hours=%s)'):format(tostring(hours)), 'reservations')
+        return { ok = false, reason = 'invalid_plan' }
+    end
     local permitted, required, progress = Progression.CanReserveSize(actor.identifier, field.sizeClass)
-    if not permitted then return { ok = false, reason = 'level_required', requiredLevel = required } end
+    if not permitted then
+        Logger.Warn(('Reserve failed: level_required (requiredLevel=%s, currentLevel=%s)'):format(tostring(required), tostring(progress and progress.level)), 'reservations')
+        return { ok = false, reason = 'level_required', requiredLevel = required }
+    end
 
     local acquired, result = Lock.With('reservation:player:' .. actor.identifier, function()
-        if Reservations.GetLink(actor.identifier) then return { ok = false, reason = 'already_participating' } end
+        if Reservations.GetLink(actor.identifier) then
+            Logger.Warn(('Reserve failed: already_participating (%s)'):format(actor.identifier), 'reservations')
+            return { ok = false, reason = 'already_participating' }
+        end
         if tonumber(MySQL.scalar.await([[SELECT COUNT(*) FROM sfpj_cooldowns WHERE identifier=? AND field_id=? AND expires_at>?]],
-            { actor.identifier, field.id, now() })) > 0 then return { ok = false, reason = 'field_cooldown' } end
-        if Reservations.GetByField(field.id) then return { ok = false, reason = 'field_unavailable' } end
+            { actor.identifier, field.id, now() })) > 0 then
+            Logger.Warn(('Reserve failed: field_cooldown (%s on %s)'):format(actor.identifier, field.id), 'reservations')
+            return { ok = false, reason = 'field_cooldown' }
+        end
+        if Reservations.GetByField(field.id) then
+            Logger.Warn(('Reserve failed: field_unavailable (%s)'):format(field.id), 'reservations')
+            return { ok = false, reason = 'field_unavailable' }
+        end
         local paid, base = price(field.sizeClass, hours, progress.level, false)
         local replay = MySQL.single.await("SELECT status FROM sfpj_economy_operations WHERE id=? AND identifier=? AND kind='reservation'",
             { operationId, actor.identifier })

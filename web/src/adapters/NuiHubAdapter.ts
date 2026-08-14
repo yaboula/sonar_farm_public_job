@@ -1,9 +1,18 @@
 import type { HubAdapter, HubContextModel, HubViewModel, HubViewRequest, IntentResult } from "../types";
 declare global { interface Window { GetParentResourceName?: () => string } }
 type Response<T> = { ok: boolean; data?: T; reason?: string; message?: string };
-export function isNuiRuntime() { try { return typeof window.GetParentResourceName === "function"; } catch { return false; } }
+export function isNuiRuntime() {
+  try {
+    return typeof window.GetParentResourceName === "function" ||
+      typeof window.parent?.GetParentResourceName === "function" ||
+      (window as any).invokeNative !== undefined ||
+      ((window.parent as any)?.invokeNative !== undefined);
+  } catch {
+    return false;
+  }
+}
 export class NuiHubAdapter implements HubAdapter {
-  private resource = window.GetParentResourceName?.() ?? "sonar_farm_publicjob";
+  private resource = (typeof window.GetParentResourceName === "function" ? window.GetParentResourceName() : window.parent?.GetParentResourceName?.()) ?? "sonar_farm_publicjob";
   private async request<T>(name: string, payload: unknown): Promise<T> {
     const response = await fetch(`https://${this.resource}/${name}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     const result = await response.json() as Response<T>;

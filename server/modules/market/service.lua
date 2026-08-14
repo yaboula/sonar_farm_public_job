@@ -17,7 +17,7 @@ local function nearMarket(source, market)
 end
 
 local function stockRows()
-    local output = { basic = math.huge }
+    local output = {}
     for _, row in ipairs(MySQL.query.await('SELECT tier,quantity,last_restock_at FROM sfpj_market_stock') or {}) do
         output[row.tier] = tonumber(row.quantity) or 0
     end
@@ -69,6 +69,15 @@ function Market.Load(source)
     if not actor then return nil, reason end
     Market.Restock(now())
     local progress, stocks, products = Progression.Get(actor.identifier), stockRows(), {}
+    local hasTablet = Bridge.Inventory.HasItem(source, Config.Market.TabletItem, 1)
+    local tabletProduct = { id = Config.Market.TabletItem, label = 'Farmer Tablet', category = 'Access',
+        tier = 'basic', price = Config.Market.TabletPrice, stock = nil, requiredLevel = 1,
+        unlocked = true, physicalOnly = true, owned = hasTablet }
+
+    if not hasTablet then
+        products[#products + 1] = tabletProduct
+    end
+
     for _, item in ipairs(Sonar.ItemCatalog.market) do
         local required = Config.Progression.ItemTierLevels[item.tier or 'basic'] or 1
         products[#products + 1] = { id = item.id, label = item.label, description = item.description,
@@ -76,9 +85,11 @@ function Market.Load(source)
             stock = item.tier == 'basic' and nil or stocks[item.tier], requiredLevel = required,
             unlocked = progress.level >= required }
     end
-    products[#products + 1] = { id = Config.Market.TabletItem, label = 'Farmer Tablet', category = 'Access',
-        tier = 'basic', price = Config.Market.TabletPrice, stock = nil, requiredLevel = 1,
-        unlocked = true, physicalOnly = true, owned = Bridge.Inventory.HasItem(source, Config.Market.TabletItem, 1) }
+
+    if hasTablet then
+        products[#products + 1] = tabletProduct
+    end
+
     return { products = products, stock = stocks, progression = progress,
         bankBalance = tonumber(Bridge.GetMoney(source, 'bank')) or 0 }
 end
@@ -125,6 +136,7 @@ function Market.Purchase(source, input)
                 return { ok = false, reason = 'tablet_already_owned' }
             end
             if not Bridge.Inventory.CanCarry(source, line.item.id, line.quantity) then
+                Logger.Warn(('Market.Purchase CanCarry rejected: player=%s item=%s qty=%d'):format(tostring(source), tostring(line.item.id), line.quantity), 'market')
                 return { ok = false, reason = 'inventory_full' }
             end
             total = total + line.item.price * line.quantity
@@ -154,6 +166,7 @@ function Market.Purchase(source, input)
         local delivered = {}
         for _, line in ipairs(lines) do
             if not Bridge.Inventory.AddItem(source, line.item.id, line.quantity) then
+                Logger.Warn(('Market.Purchase AddItem failed: player=%s item=%s qty=%d'):format(tostring(source), tostring(line.item.id), line.quantity), 'market')
                 for _, previous in ipairs(delivered) do Bridge.Inventory.RemoveItem(source, previous.item.id, previous.quantity) end
                 for tier, quantity in pairs(requiredStock) do
                     MySQL.update.await('UPDATE sfpj_market_stock SET quantity=LEAST(?,quantity+?) WHERE tier=?',
