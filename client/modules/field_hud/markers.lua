@@ -117,10 +117,12 @@ local function rebuild()
             weeds = crop and crop.weeds, pests = crop and crop.pests,
             optimalMin = crop and crop.optimalMin, optimalMax = crop and crop.optimalMax,
         })
+        local dx, dy, dz = coords.x - slot.x, coords.y - slot.y, coords.z - slot.z
         local entry = {
             id = slot.id, rowId = slot.rowId, index = slot.index, zone = slot.zone,
             x = slot.x, y = slot.y, z = slot.z,
-            distance = #(coords - vec3(slot.x, slot.y, slot.z)), kind = classification.kind,
+            drawZ = slot.z + Config.FieldHud.MarkerHeight,
+            distance = math.sqrt(dx * dx + dy * dy + dz * dz), kind = classification.kind,
             action = classification.action, priority = classification.priority,
             isMine = crop and crop.isMine or false,
         }
@@ -143,25 +145,32 @@ CreateThread(function()
     while true do
         if authority and #markerCache > 0 and GetInteriorFromEntity(PlayerPedId()) == 0 then
             local coords = GetEntityCoords(PlayerPedId())
+            local maxDistance = Config.FieldHud.MarkerMaxDistance
+            local maxDistanceSquared = maxDistance * maxDistance
+            local priorityId = prioritySlot and prioritySlot.id
             for _, marker in ipairs(markerCache) do
-                local distance = #(coords - vec3(marker.x, marker.y, marker.z))
-                if distance <= Config.FieldHud.MarkerMaxDistance then
-                    local visible, sx, sy = GetScreenCoordFromWorldCoord(marker.x, marker.y,
-                        marker.z + Config.FieldHud.MarkerHeight)
+                local dx, dy, dz = coords.x - marker.x, coords.y - marker.y, coords.z - marker.z
+                local distanceSquared = dx * dx + dy * dy + dz * dz
+                if distanceSquared <= maxDistanceSquared then
+                    local visible, sx, sy = GetScreenCoordFromWorldCoord(marker.x, marker.y, marker.drawZ)
                     if visible then
-                        local ratio = math.max(0, math.min(1, distance / Config.FieldHud.MarkerMaxDistance))
+                        local distance = math.sqrt(distanceSquared)
+                        local ratio = math.max(0, math.min(1, distance / maxDistance))
                         local scale = Config.FieldHud.MarkerMaxScale
                             - (Config.FieldHud.MarkerMaxScale - Config.FieldHud.MarkerMinScale) * ratio
-                        if prioritySlot and prioritySlot.id == marker.id then
+                        local selected = priorityId == marker.id
+                        if selected then
                             scale = math.min(scale * (Config.FieldHud.MarkerPriorityScale or 1.22), 0.036)
                         end
                         local alpha = math.floor(Config.FieldHud.MarkerMaxAlpha
                             - (Config.FieldHud.MarkerMaxAlpha - Config.FieldHud.MarkerMinAlpha) * ratio)
                         local color = COLORS[marker.kind] or COLORS.blocked
-                        local groundScale = Config.FieldHud.MarkerGroundScale or 0.58
-                        DrawMarker(27, marker.x, marker.y, marker.z + 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                            groundScale, groundScale, groundScale, color[1], color[2], color[3],
-                            math.min(180, alpha), false, false, 2, nil, nil, false)
+                        if selected or not Config.FieldHud.MarkerGroundOnlyPriority then
+                            local groundScale = Config.FieldHud.MarkerGroundScale or 0.58
+                            DrawMarker(27, marker.x, marker.y, marker.z + 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                groundScale, groundScale, groundScale, color[1], color[2], color[3],
+                                math.min(180, alpha), false, false, 2, nil, nil, false)
+                        end
                         DrawSprite(textureDictionary, textureName, sx, sy, scale, scale * 1.7778,
                             0.0, color[1], color[2], color[3], alpha)
                     end

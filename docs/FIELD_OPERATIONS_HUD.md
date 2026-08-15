@@ -26,11 +26,11 @@ Every streamed slot in the reserved Field receives the same optimized agricultur
 | Bright yellow | Own crop ready to harvest |
 | Gray | Blocked by job, duty, grace or departing membership |
 
-The highest-priority nearby actionable slot is statically larger. There is no pulse, sound, particle or physical prop. FiveM projects and tints one 128×128 transparent texture at exact server-loaded slot coordinates; the NUI never receives 24/40/64 coordinates per frame.
+The highest-priority nearby actionable slot is statically larger and is the only slot with an additional ground ring. There is no pulse, sound, particle or physical prop. FiveM projects and tints one 128×128 transparent texture at exact server-loaded slot coordinates; the NUI never receives 24/40/64 coordinates per frame.
 
 The same streamed slots are mirrored as small native GTA blips on the minimap and pause map. Blips inherit the semantic state color, keep the priority slot slightly larger and are removed immediately when the topology changes, leaves streaming range or the reservation ends. They are presentation only and never bypass `ox_target` or server validation.
 
-Ground Z is resolved once when topology is streamed. Classification is cached at `Config.FieldHud.ClassificationMs`; only screen projection and `DrawSprite` remain in the frame loop. Indicators are skipped in interiors and outside `MarkerMaxDistance`.
+Ground Z is resolved once when topology is streamed. Classification is cached at `Config.FieldHud.ClassificationMs`; only allocation-free distance checks, screen projection, `DrawSprite` and the single priority ring remain in the frame loop. Indicators are skipped in interiors and outside `MarkerMaxDistance`.
 
 ## Runtime authority
 
@@ -54,4 +54,4 @@ Before release, validate with the real MySQL Fields:
 4. Marker alignment, ground snap, map colors, priority scale and ox_target options from different camera angles.
 5. Hub/minigame suppression and simultaneous Crop Inspection.
 6. 1280×720, 1920×1080 and 2560×1080 with chat and minimap enabled.
-7. L64 resmon average target at or below 0.25 ms and no persistent texture/marker state after reservation end.
+7. Resmon average target at or below 0.10 ms for S24 and 0.18 ms for L64, with no persistent texture/marker state after reservation end.

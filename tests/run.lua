@@ -158,6 +158,12 @@ test('Field HUD config and lifecycle contracts are wired', function()
         'world markers remain discreet')
     assert(Config.FieldHud.MapBlipsEnabled == true and Config.FieldHud.MapBlipScale <= 0.30,
         'map markers are enabled and compact')
+    assert(Config.FieldHud.MarkerGroundOnlyPriority == true
+        and markers:find('distanceSquared', 1, true)
+        and markers:find('selected or not Config.FieldHud.MarkerGroundOnlyPriority', 1, true),
+        'marker renderer must avoid per-slot ground draws and vector allocations')
+    assert(client:find("wasVisible and 'fieldHud:update' or 'fieldHud:show'", 1, true),
+        'background refresh must merge rather than remount the HUD')
     assert(slots:find('publicJobAvailable', 1, true), 'client target job/duty predicate')
 end)
 
@@ -267,6 +273,17 @@ test('gameplay action mutex spans animation and authoritative callback', functio
     local unlock = assert(source:find('actionInFlight = false', callback, true),
         'action mutex must release after the callback')
     assert(lock < callback and callback < unlock, 'action mutex ordering must cover animation and callback')
+    local approach = assert(source:find('approachSlot(slot)', lock, true),
+        'selected Slot approach must execute inside the mutex')
+    assert(lock < approach and approach < callback, 'movement and heading must finish before animation/callback')
+    for _, contract in ipairs({ 'TaskGoStraightToCoord', 'TaskAchieveHeading', 'SetEntityHeading',
+        'ApproachStandOffDistance', 'ApproachTolerance', 'function Slots.Get' }) do
+        local haystack = contract == 'function Slots.Get' and (function()
+            local slots = assert(io.open('client/modules/zones/slots.lua', 'rb'))
+            local value = slots:read('*a'); slots:close(); return value
+        end)() or source
+        assert(haystack:find(contract, 1, true), 'missing exact Slot action positioning contract: ' .. contract)
+    end
     assert(source:find('Finish the current farming action first.', 1, true), 'busy action rejection is required')
     assert(source:find('function Actions.IsBusy()', 1, true), 'shared action busy state is required')
 end)
