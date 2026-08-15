@@ -252,6 +252,25 @@ function Crops.InteractionState(cropId)
     return entry.interactions
 end
 
+--- Read-only crop presentation state consumed by the Field HUD classifier.
+function Crops.HudState(zoneKey, slotIndex)
+    local cropId = Crops.SlotOccupant(zoneKey, slotIndex)
+    if not cropId then return nil end
+    local record = cache[cropId]
+    local condition = Crops.Condition(cropId)
+    if not record or not condition then return nil end
+    local definition = Config.Crops and Config.Crops[record.crop_type] or {}
+    return {
+        id = record.id, cropType = record.crop_type, state = condition.state or record.state,
+        isMine = record.isMine == true, progress = condition.progress,
+        health = condition.health, water = condition.water, nutrients = condition.nutrients,
+        weeds = condition.weedCover, pests = condition.pestPressure,
+        optimalMin = definition.nutrients and definition.nutrients.optimalMin,
+        optimalMax = definition.nutrients and definition.nutrients.optimalMax,
+        interactions = Crops.InteractionState(cropId),
+    }
+end
+
 --- Closest cached crop to a position, within `radius`.
 ---@param coords vector3
 ---@param radius? number

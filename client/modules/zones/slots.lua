@@ -18,6 +18,8 @@ local CROP_STATE = Sonar.Constants.CROP_STATE
 
 -- [ "zone:index" ] = { zoneId = number|string, propKey = string }
 local registered = {}
+local streamedFields = {}
+local jobCache = { allowed = false, expiresAt = 0 }
 
 ---@param zoneKey string
 ---@param index number
@@ -33,13 +35,26 @@ local function propKeyOf(zoneKey, index)
     return ('slot:%s:%d'):format(zoneKey, index)
 end
 
+local function publicJobAvailable()
+    local timer = GetGameTimer()
+    if timer < jobCache.expiresAt then return jobCache.allowed end
+    local data = Bridge.GetPlayerData() or {}
+    local job = data.job or {}
+    jobCache.allowed = job.name == Config.Job.Name and (not Config.Job.RequireDuty or job.onduty == true)
+    jobCache.expiresAt = timer + 500
+    return jobCache.allowed
+end
+
+RegisterNetEvent('QBCore:Client:OnJobUpdate', function() jobCache.expiresAt = 0 end)
+RegisterNetEvent('QBCore:Client:SetDuty', function() jobCache.expiresAt = 0 end)
+
 local function reservationAllows(slot, allowGrace)
-    return slot and (slot.memberStatus == 'active' or slot.memberStatus == 'departing')
+    return publicJobAvailable() and slot and (slot.memberStatus == 'active' or slot.memberStatus == 'departing')
         and (slot.reservationStatus == 'active' or allowGrace and slot.reservationStatus == 'grace')
 end
 
 local function canPlant(slot)
-    return slot and slot.memberStatus == 'active' and slot.reservationStatus == 'active'
+    return publicJobAvailable() and slot and slot.memberStatus == 'active' and slot.reservationStatus == 'active'
 end
 
 local function canCare(slot, crop)
@@ -310,10 +325,21 @@ end
 function Slots.ReplaceFields(fields)
     if not Config.Features.PublicFieldAuthority then return end
     local wanted = {}
+    streamedFields = {}
     for _, field in ipairs(fields or {}) do
+        streamedFields[field.id] = {
+            id = field.id, name = field.name, access = field.access,
+            revisionId = field.revisionId, topologyRevision = field.topologyRevision,
+            memberStatus = field.memberStatus, reservationStatus = field.reservationStatus,
+        }
         for _, slot in ipairs(field.slots or {}) do
             slot.memberStatus = field.memberStatus
             slot.reservationStatus = field.reservationStatus
+            slot.markerZ = slot.z
+            if Config.Render.GroundSnap then
+                local found, groundZ = GetGroundZFor_3dCoord(slot.x, slot.y, slot.z + 1.0, false)
+                if found and math.abs(groundZ - slot.z) < 3.0 then slot.markerZ = groundZ end
+            end
             local key = keyOf(slot.zone, slot.index)
             wanted[key] = true
             if not registered[key] then
@@ -333,6 +359,34 @@ function Slots.ReplaceFields(fields)
             registered[key] = nil
         end
     end
+end
+
+--- Read-only presentation snapshot for Field HUD/markers.
+function Slots.HudSnapshot()
+    local fields = {}
+    for id, field in pairs(streamedFields) do
+        fields[id] = {
+            id = field.id, name = field.name, access = field.access,
+            revisionId = field.revisionId, topologyRevision = field.topologyRevision,
+            memberStatus = field.memberStatus, reservationStatus = field.reservationStatus,
+            slots = {},
+        }
+    end
+    for _, entry in pairs(registered) do
+        local slot = entry.slot
+        local field = slot and fields[slot.fieldId]
+        if field then
+            field.slots[#field.slots + 1] = {
+                id = slot.id, rowId = slot.rowId, index = slot.index, zone = slot.zone,
+                x = slot.x, y = slot.y, z = slot.markerZ or slot.z, heading = slot.heading,
+                memberStatus = slot.memberStatus, reservationStatus = slot.reservationStatus,
+            }
+        end
+    end
+    for _, field in pairs(fields) do
+        table.sort(field.slots, function(left, right) return left.index < right.index end)
+    end
+    return fields
 end
 
 function Slots.ClearDynamic()

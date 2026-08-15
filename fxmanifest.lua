@@ -47,7 +47,7 @@ client_scripts {
     'client/modules/interaction/actions.lua',
     'client/modules/minigames/controller.lua', 'client/modules/hub/controller.lua',
     'client/modules/inspection/controller.lua', 'client/modules/zones/slots.lua',
-    'client/modules/field_hud/controller.lua',
+    'client/modules/field_hud/controller.lua', 'client/modules/field_hud/markers.lua',
     'client/modules/sync/client.lua', 'client/modules/zones/blips.lua',
     'client/modules/admin/permissions.lua', 'client/modules/admin/zone_builder.lua',
     'client/modules/admin/slot_builder.lua', 'client/modules/debug/commands.lua',
@@ -59,5 +59,5 @@ files {
     'minigames-ui/dist/index.html', 'minigames-ui/dist/assets/**/*',
     'minigames-ui/dist/contracts/**/*', 'inspection-ui/dist/index.html',
     'inspection-ui/dist/assets/**/*', 'field-hud/dist/index.html', 'field-hud/dist/assets/**/*',
-    'web/build/index.html', 'web/build/assets/**/*',
+    'world/slot-marker.png', 'web/build/index.html', 'web/build/assets/**/*',
 }
