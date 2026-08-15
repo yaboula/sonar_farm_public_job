@@ -50,4 +50,15 @@ describe("Field Operations HUD", () => {
     expect(screen.queryByText("Field operations")).not.toBeInTheDocument();
     vi.useRealTimers();
   });
+  it("merges background refresh state without flashing zero counts or priority", () => {
+    render(<App initial={fieldHudFixture()}/>);
+    expect(screen.getAllByText("Harvest").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("11").length).toBeGreaterThan(0);
+    act(() => window.dispatchEvent(new MessageEvent("message", {
+      data: { type: "fieldHud:update", payload: { sync: "loading" } },
+    })));
+    expect(screen.getAllByText("Harvest").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("11").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Syncing Field")).not.toBeInTheDocument();
+  });
 });

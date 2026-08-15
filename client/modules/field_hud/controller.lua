@@ -22,30 +22,6 @@ local function remaining()
     return math.max(0, (tonumber(deadline) or 0) - now())
 end
 
-local function refresh()
-    if refreshing or not Config.FieldHud.Enabled then return end
-    refreshing = true
-    if state then ui('fieldHud:update', { sync = 'loading' }) end
-    local response = lib.callback.await(CALLBACKS.FIELD_HUD_STATE, false)
-    refreshing = false
-    if not response or not response.ok then
-        if state then ui('fieldHud:update', { sync = 'unavailable', stale = true }) end
-        return
-    end
-    syncedServerTime, syncedAt, lastSuccessAt = tonumber(response.serverTime) or 0, GetGameTimer(), GetGameTimer()
-    if not response.data then
-        state = nil
-        if FieldMarkers and FieldMarkers.Clear then FieldMarkers.Clear() end
-        ui('fieldHud:hide')
-        return
-    end
-    state = response.data
-    if FieldMarkers and FieldMarkers.SetState then FieldMarkers.SetState(state) end
-    ui('fieldHud:show', { state = state, expanded = expanded, position = Config.FieldHud.Position })
-end
-
-function FieldHud.Refresh() CreateThread(refresh) end
-
 local function markerSnapshot()
     if FieldMarkers and FieldMarkers.Snapshot then return FieldMarkers.Snapshot() end
     return { counts = { empty = 0, healthy = 0, care = 0, critical = 0,
@@ -65,17 +41,42 @@ local function nextAction(prioritySlot)
     return { label = 'Move closer to your Field' }
 end
 
-local function pushUpdate()
+local function pushUpdate(messageType, syncState, stale)
     if not state then return end
     local age = (GetGameTimer() - lastSuccessAt) / 1000
     local markers = markerSnapshot()
-    ui('fieldHud:update', {
+    ui(messageType or 'fieldHud:update', {
         state = state, expanded = expanded, position = Config.FieldHud.Position,
         serverNow = now(), remainingSeconds = remaining(), counts = markers.counts,
         nextAction = nextAction(markers.priority), streamedSlots = markers.streamedSlots,
-        sync = age > Config.FieldHud.StaleSeconds and 'stale' or 'ready',
+        sync = syncState or (age > Config.FieldHud.StaleSeconds and 'stale' or 'ready'),
+        stale = stale == true,
     })
 end
+
+local function refresh()
+    if refreshing or not Config.FieldHud.Enabled then return end
+    refreshing = true
+    local wasVisible = state ~= nil
+    local response = lib.callback.await(CALLBACKS.FIELD_HUD_STATE, false)
+    refreshing = false
+    if not response or not response.ok then
+        if state then pushUpdate('fieldHud:update', 'unavailable', true) end
+        return
+    end
+    syncedServerTime, syncedAt, lastSuccessAt = tonumber(response.serverTime) or 0, GetGameTimer(), GetGameTimer()
+    if not response.data then
+        state = nil
+        if FieldMarkers and FieldMarkers.Clear then FieldMarkers.Clear() end
+        ui('fieldHud:hide')
+        return
+    end
+    state = response.data
+    if FieldMarkers and FieldMarkers.SetState then FieldMarkers.SetState(state) end
+    pushUpdate(wasVisible and 'fieldHud:update' or 'fieldHud:show', 'ready', false)
+end
+
+function FieldHud.Refresh() CreateThread(refresh) end
 
 RegisterCommand(Config.FieldHud.ToggleCommand, function()
     if not state then return end

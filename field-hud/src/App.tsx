@@ -45,10 +45,15 @@ export function App({ initial }: { initial?: FieldHudView }) {
       if (message.type === "fieldHud:hide") return setView(null);
       if (message.type === "fieldHud:mode") return setView((current) => current ? { ...current, expanded: message.payload?.expanded ?? current.expanded } : current);
       if (message.type === "fieldHud:show" && message.payload?.state) {
+        setTick(0);
         return setView(message.payload as FieldHudView);
       }
-      if (message.type === "fieldHud:update" && message.payload?.state) {
-        setView((current) => current ? { ...current, ...message.payload, state: message.payload?.state ?? current.state } : (message.payload as FieldHudView));
+      if (message.type === "fieldHud:update") {
+        if (message.payload?.remainingSeconds != null) setTick(0);
+        setView((current) => {
+          if (!current) return message.payload?.state ? message.payload as FieldHudView : current;
+          return { ...current, ...message.payload, state: message.payload?.state ?? current.state };
+        });
       }
     };
     window.addEventListener("message", receive);
