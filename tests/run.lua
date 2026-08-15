@@ -70,6 +70,7 @@ dofile('shared/conditions.lua')
 dofile('shared/growth.lua')
 dofile('shared/physiology.lua')
 dofile('shared/inspection.lua')
+dofile('shared/field_hud.lua')
 dofile('shared/zones.lua')
 dofile('shared/fields.lua')
 dofile('shared/config_validation.lua')
@@ -79,6 +80,79 @@ dofile('server/modules/inventory/items.lua')
 test('production config validates', function()
     local errors = Sonar.ConfigValidation.Validate()
     equal(#errors, 0, table.concat(errors, '; '))
+end)
+
+test('Field HUD classifies full S M and L topologies without hiding slots', function()
+    for _, slotCount in ipairs({ 24, 40, 64 }) do
+        local entries = {}
+        for index = 1, slotCount do
+            local input = { accessAllowed = true, memberStatus = 'active', reservationStatus = 'active' }
+            if index % 6 == 1 then input.occupied = false
+            elseif index % 6 == 2 then input.occupied = true; input.isMine = true; input.progress = 1; input.state = 'mature'
+            elseif index % 6 == 3 then input.occupied = true; input.water = 25; input.health = 80
+            elseif index % 6 == 4 then input.occupied = true; input.water = 55; input.health = 90
+            else input.occupied = true; input.water = 90; input.health = 90 end
+            local result = Sonar.FieldHud.Classify(input)
+            entries[#entries + 1] = { kind = result.kind, priority = result.priority, distance = index }
+        end
+        equal(#entries, slotCount, 'every streamed slot receives a glyph')
+        equal(Sonar.FieldHud.Prioritize(entries).kind, 'ready', 'ready own crop is the first actionable priority')
+    end
+end)
+
+test('Field HUD respects grace duty and departing interaction restrictions', function()
+    equal(Sonar.FieldHud.Classify({ accessAllowed = false, memberStatus = 'active',
+        reservationStatus = 'active', occupied = false }).kind, 'blocked', 'off-duty slot')
+    equal(Sonar.FieldHud.Classify({ accessAllowed = true, memberStatus = 'active',
+        reservationStatus = 'grace', occupied = false }).kind, 'blocked', 'grace empty slot')
+    equal(Sonar.FieldHud.Classify({ accessAllowed = true, memberStatus = 'departing',
+        reservationStatus = 'active', occupied = true, isMine = true, progress = 1 }).kind,
+        'ready', 'departing owner harvest')
+    equal(Sonar.FieldHud.Classify({ accessAllowed = false, memberStatus = 'departing',
+        reservationStatus = 'active', occupied = true, isMine = false }).kind,
+        'blocked', 'departing non-owner crop')
+end)
+
+test('Field HUD payload is privacy safe and counts co-op without identities', function()
+    local payload = Sonar.FieldHud.BuildPayload(
+        { id = 'field', name = 'Field', region = 'Grapeseed', sizeClass = 'L', slots = (function()
+            local slots = {}; for index = 1, 64 do slots[index] = { id = tostring(index) } end; return slots
+        end)() },
+        { role = 'guest', status = 'departing' },
+        { id = 'reservation', status = 'grace', expiresAt = 100, graceUntil = 200,
+            isOwner = false, liveCrops = 8, ownCrops = 3,
+            members = { { identifier = 'private-owner', display_name = 'Private Owner', status = 'active' },
+                { identifier = 'private-guest', display_name = 'Private Guest', status = 'departing' } } },
+        { allowed = false, onDuty = false, reason = 'duty_required' })
+    equal(payload.field.slotCount, 64, 'L64 topology count')
+    equal(payload.reservation.memberCount, 2, 'co-op count')
+    local function contains(value, wanted)
+        if type(value) ~= 'table' then return value == wanted end
+        for key, nested in pairs(value) do if key == wanted or contains(nested, wanted) then return true end end
+        return false
+    end
+    assert(not contains(payload, 'private-owner') and not contains(payload, 'Private Owner'),
+        'member identity must never enter the HUD payload')
+end)
+
+test('Field HUD config and lifecycle contracts are wired', function()
+    equal(Config.FieldHud.Position, 'left-center', 'default position')
+    equal(Config.FieldHud.ToggleKey, 'C', 'default key')
+    local function read(path)
+        local file = assert(io.open(path, 'rb')); local value = file:read('*a'); file:close(); return value
+    end
+    local server = read('server/modules/field_hud/runtime.lua')
+    local fields = read('server/modules/fields/service.lua')
+    local client = read('client/modules/field_hud/controller.lua')
+    local markers = read('client/modules/field_hud/markers.lua')
+    local slots = read('client/modules/zones/slots.lua')
+    assert(server:find('Runtime.GuardPlayer', 1, true), 'passive snapshot must not require duty')
+    assert(server:find('BuildPayload', 1, true), 'privacy-safe payload builder')
+    assert(fields:find('FieldHudRuntime.InvalidateField', 1, true), 'reservation invalidation hook')
+    assert(client:find('RegisterKeyMapping', 1, true) and client:find("'fieldHud:mode'", 1, true), 'C mode toggle')
+    assert(markers:find('DrawSprite', 1, true) and markers:find('GetScreenCoordFromWorldCoord', 1, true),
+        'projected marker renderer')
+    assert(slots:find('publicJobAvailable', 1, true), 'client target job/duty predicate')
 end)
 
 test('configured Field seeds compile stable versioned topology', function()
