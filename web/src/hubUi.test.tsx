@@ -57,6 +57,17 @@ describe("public-job Hub visual contract", () => {
     expect(within(dialog).getByRole("button", { name: "Pay $24" })).toBeEnabled();
   });
 
+  it("accepts direct keyboard quantities and clamps them to the per-line limit", async () => {
+    const user = userEvent.setup();
+    renderHub("/market");
+    await screen.findByRole("heading", { name: "Market" });
+    const quantity = screen.getByRole("spinbutton", { name: "Quantity for Carrot Seeds" });
+    await user.click(quantity);
+    await user.keyboard("100");
+    expect(quantity).toHaveValue(99);
+    expect(within(screen.getByRole("complementary")).getByText("99×")).toBeVisible();
+  });
+
   it("enforces the ten-line Market cart limit", async () => {
     const user = userEvent.setup();
     renderHub("/market");

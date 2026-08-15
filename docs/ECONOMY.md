@@ -16,6 +16,8 @@ Basic stock is unlimited. Plus capacity is 20 and restores 5 every 30 minutes. P
 
 The tablet costs $1,500 and is purchasable only at a physical Market. Other products can be purchased from either physical Market or a carried tablet.
 
+Catalog quantity controls support both +/- buttons and direct keyboard entry. Values are clamped client-side to authoritative stock and the configured 99-unit per-line limit, then revalidated by the server during purchase.
+
 ## Sell
 
 Standard unit prices are Carrot $12, Potato $10, Lettuce $14 and Tomato $16. Quality multipliers are Poor 0.5, Standard 1.0, Fine 1.5 and Premium 2.0. The personal level bonus is applied last, and each selected group subtotal is rounded once.

@@ -39,15 +39,21 @@ export function MarketView() {
   if (view.state !== "ready") return <StatePanel state={view.state} onAction={() => void view.reload()} />;
   if (!view.data) return <StatePanel state="empty" />;
 
-  const adjust = (product: MarketDisplayProduct, delta: number) => {
+  const updateQuantity = (product: MarketDisplayProduct, requested: number | ((current: number) => number)) => {
     operationRef.current = undefined;
     setCart((current) => {
       const currentValue = current[product.id] ?? 0;
-      if (delta > 0 && currentValue === 0 && Object.values(current).filter((value) => value > 0).length >= 10) return current;
       const max = product.stock == null ? 99 : Math.min(99, product.stock);
-      return { ...current, [product.id]: Math.max(0, Math.min(max, currentValue + delta)) };
+      const raw = typeof requested === "function" ? requested(currentValue) : requested;
+      const next = Math.max(0, Math.min(max, Number.isFinite(raw) ? Math.floor(raw) : 0));
+      if (next > 0 && currentValue === 0 && Object.values(current).filter((value) => value > 0).length >= 10) return current;
+      if (next === currentValue) return current;
+      return { ...current, [product.id]: next };
     });
   };
+
+  const adjust = (product: MarketDisplayProduct, delta: number) =>
+    updateQuantity(product, (current) => current + delta);
 
   const purchase = async () => {
     operationRef.current ??= crypto.randomUUID();
@@ -71,7 +77,7 @@ export function MarketView() {
         <div className="supply-card-intro"><div className="supply-card-head"><span>{item.category}</span><div className="supply-card-delivery"><small>{item.leadMinutes ? "Immediate" : "Physical only"}</small><span className="supply-card-tier" data-tier={item.tier}>{item.tier}</span></div></div><div className="supply-card-title-row"><h2>{item.label}</h2><div className="supply-card-visual"><img src={item.image} alt="" /></div></div></div>
         <p>{item.description}</p><small className="supply-effect">{item.effect}</small><small className="supply-crop">{item.cropRelation} · {item.applications} application{item.applications === 1 ? "" : "s"}</small>
         <div className="supply-meta"><span><Package size={16} />{item.stock == null ? "Unlimited stock" : item.stock === 0 ? "Sold out" : `${item.stock} global stock`}</span><strong><Tag size={16} />${item.price}</strong></div><div className="supply-owned"><span>Requires level {item.requiredLevel}</span><small>{item.restock}</small></div>
-        {disabled ? <div className="supply-lock"><LockKey size={15} />{item.owned ? "Already owned" : physicallyBlocked ? "Buy at a physical Market" : !item.unlocked ? `Unlocks at level ${item.requiredLevel}` : "Out of stock"}</div> : <div className="quantity-control"><button type="button" aria-label={`Remove ${item.label}`} disabled={!quantity} onClick={() => adjust(item, -1)}><Minus size={16} /></button><strong>{quantity}</strong><button type="button" aria-label={`Add ${item.label}`} onClick={() => adjust(item, 1)}><Plus size={16} /></button></div>}
+        {disabled ? <div className="supply-lock"><LockKey size={15} />{item.owned ? "Already owned" : physicallyBlocked ? "Buy at a physical Market" : !item.unlocked ? `Unlocks at level ${item.requiredLevel}` : "Out of stock"}</div> : <div className="quantity-control"><button type="button" aria-label={`Remove ${item.label}`} disabled={!quantity} onClick={() => adjust(item, -1)}><Minus size={16} /></button><input type="number" inputMode="numeric" min={0} max={item.stock == null ? 99 : Math.min(99, item.stock)} step={1} aria-label={`Quantity for ${item.label}`} value={quantity} onFocus={(event) => event.currentTarget.select()} onChange={(event) => updateQuantity(item, Number(event.currentTarget.value))} onWheel={(event) => event.currentTarget.blur()} /><button type="button" aria-label={`Add ${item.label}`} disabled={quantity >= (item.stock == null ? 99 : Math.min(99, item.stock))} onClick={() => adjust(item, 1)}><Plus size={16} /></button></div>}
       </article>;
     }) : <div className="inline-empty">No products match this catalog filter.</div>}</div>
     {reviewOpen ? <ConfirmDialog eyebrow="Personal Market" title="Confirm this purchase?" confirmLabel={`Pay ${money(total)}`} pending={busy} confirmDisabled={insufficientFunds} onClose={() => setReviewOpen(false)} onConfirm={() => void purchase()}><div className="confirmation-lines">{lines.map((line) => <div key={line.product.id}><span>{line.quantity}× {line.product.label}</span><strong>{money(line.quantity * line.product.price)}</strong></div>)}</div><div className="confirmation-facts"><div><span>Bank before</span><strong>{money(view.data.bankBalance)}</strong></div><div><span>Bank after</span><strong>{money(view.data.bankBalance - total)}</strong></div></div><div className="confirmation-total"><span>Personal bank total</span><strong>{money(total)}</strong></div>{insufficientFunds ? <p className="validation-warning">Your personal bank balance is too low for this purchase.</p> : null}<p>Stock, funds and inventory capacity will be checked again. A rejected purchase keeps this cart intact.</p></ConfirmDialog> : null}

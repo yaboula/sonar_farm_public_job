@@ -307,10 +307,13 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .supply-meta strong { color: var(--accent); }
 .supply-owned { margin-top: 8px; color: var(--text-muted); font-size: 10px; }
 .quantity-control { display: flex; justify-content: flex-end; margin-top: 9px; }
-.quantity-control button,.quantity-control strong { width: 31px; height: 28px; display: grid; place-items: center; border: 1px solid var(--border-subtle); background: rgba(255,255,255,.025); }
+.quantity-control button,.quantity-control strong,.quantity-control input { width: 31px; height: 28px; display: grid; place-items: center; border: 1px solid var(--border-subtle); background: rgba(255,255,255,.025); }
 .quantity-control button { color: var(--accent); }
 .quantity-control button:disabled { color: var(--text-disabled); }
-.quantity-control strong { border-left: 0; border-right: 0; color: var(--text-primary); }
+.quantity-control strong,.quantity-control input { border-left: 0; border-right: 0; color: var(--text-primary); }
+.quantity-control input { width: 48px; padding: 0 4px; outline: 0; font: 700 13px/1 var(--display); text-align: center; appearance: textfield; }
+.quantity-control input:focus { color: var(--accent); background: rgba(245,195,49,.08); box-shadow: inset 0 0 0 1px var(--accent); }
+.quantity-control input::-webkit-inner-spin-button,.quantity-control input::-webkit-outer-spin-button { margin: 0; appearance: none; }
 .supply-lock { height: 28px; display: flex; align-items: center; justify-content: flex-end; gap: 5px; margin-top: 9px; color: #d29178; font-size: 11px; }
 .supply-payer-summary { display: grid; grid-template-columns: 1fr auto; gap: 2px; margin-top: 11px; padding: 9px; border: 1px solid var(--border-subtle); }
 .supply-payer-summary span { grid-column: span 2; color: var(--text-muted); font-family: var(--display); font-size: 11px; text-transform: uppercase; }
