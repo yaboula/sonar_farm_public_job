@@ -47,7 +47,9 @@ export function App({ initial }: { initial?: FieldHudView }) {
       if (message.type === "fieldHud:show" && message.payload?.state) {
         return setView(message.payload as FieldHudView);
       }
-      if (message.type === "fieldHud:update") setView((current) => current ? { ...current, ...message.payload, state: message.payload?.state ?? current.state } : current);
+      if (message.type === "fieldHud:update" && message.payload?.state) {
+        setView((current) => current ? { ...current, ...message.payload, state: message.payload?.state ?? current.state } : (message.payload as FieldHudView));
+      }
     };
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);

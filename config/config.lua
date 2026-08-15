@@ -122,7 +122,7 @@ Config.Market = {
 
 Config.Sell = {
     InteractionDistance = 3.0,
-    Buyer = { label = 'Comprador de Cosecha', coords = vec3(1711.26, 4728.50, 42.14), -- Desplazado ligeramente 1 metro para que no se pise con el mercado
+    Buyer = { label = 'Comprador de Cosecha', coords = vec3(1718.70, 4712.93, 42.22), -- Desplazado ligeramente 1 metro para que no se pise con el mercado
         radius = 1.8, ped = 's_m_m_dockwork_01', heading = 104.88,
         blip = { enabled = true, sprite = 500, color = 25, scale = 0.75 } },
     BasePrices = { carrot = 12, potato = 10, lettuce = 14, tomato = 16 },

@@ -79,6 +79,7 @@ CreateThread(function()
                         local alpha = math.floor(Config.FieldHud.MarkerMaxAlpha
                             - (Config.FieldHud.MarkerMaxAlpha - Config.FieldHud.MarkerMinAlpha) * ratio)
                         local color = COLORS[marker.kind] or COLORS.blocked
+                        DrawMarker(27, marker.x, marker.y, marker.z + 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.75, 0.75, 0.75, color[1], color[2], color[3], math.min(180, alpha), false, false, 2, nil, nil, false)
                         DrawSprite(textureDictionary, textureName, sx, sy, scale, scale * 1.7778,
                             0.0, color[1], color[2], color[3], alpha)
                     end
