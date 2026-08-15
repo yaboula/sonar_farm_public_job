@@ -77,6 +77,7 @@ local STALE_CACHE_REASONS = {
 
 -- Seed item -> crop type, built once from the crop definitions.
 local seedToCrop = {}
+local feedbackFallbackWarned = false
 for cropType, def in pairs(Config.Crops or {}) do
     if def.seedItem then
         seedToCrop[def.seedItem] = cropType
@@ -107,7 +108,27 @@ Actions.HandleRejection = handleRejection
 ---@param action string
 ---@return boolean completed
 local function actionProgress(label, action)
-    return GameplayFeedback.Run(label, action)
+    if type(GameplayFeedback) == 'table' and type(GameplayFeedback.Run) == 'function' then
+        return GameplayFeedback.Run(label, action)
+    end
+
+    -- Keep farming usable if a server deploys actions.lua before the new
+    -- feedback controller or FiveM is still holding an older manifest cache.
+    -- A complete resource restart will restore props, audio and VFX.
+    if not feedbackFallbackWarned then
+        feedbackFallbackWarned = true
+        Bridge.Log('warn', 'Gameplay feedback controller is not loaded; using safe progress fallback. Restart the resource after deploying every file.')
+    end
+    local feedback = Config.Gameplay and Config.Gameplay.ActionFeedback
+        and Config.Gameplay.ActionFeedback[action] or {}
+    return lib.progressCircle({
+        duration = tonumber(feedback.duration) or 2500,
+        label = label,
+        position = 'bottom',
+        useWhileDead = false,
+        canCancel = true,
+        disable = { move = true, car = true, combat = true, sprint = true },
+    }) == true
 end
 
 -- ---------------------------------------------------------------------------

@@ -11,7 +11,10 @@ function Hub.Close()
 end
 
 function Hub.Open(surface, presence, marketId)
-    if active or Minigame.IsActive() or GameplayFeedback.IsActive() then return end
+    local feedbackActive = type(GameplayFeedback) == 'table'
+        and type(GameplayFeedback.IsActive) == 'function'
+        and GameplayFeedback.IsActive()
+    if active or Minigame.IsActive() or feedbackActive then return end
     if Inspection and Inspection.IsActive() then Inspection.Close('hub_open') end
     local response = lib.callback.await(CALLBACKS.HUB_OPEN, false,
         { surface = surface, presence = presence, marketId = marketId })

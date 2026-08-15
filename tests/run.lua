@@ -167,6 +167,19 @@ test('gameplay feedback defines six distinct actions and guaranteed cleanup', fu
     end
 end)
 
+test('gameplay actions fail soft when a partial deploy omits the feedback controller', function()
+    local actions = assert(io.open('client/modules/interaction/actions.lua', 'rb'))
+    local actionSource = actions:read('*a'); actions:close()
+    local hub = assert(io.open('client/modules/hub/controller.lua', 'rb'))
+    local hubSource = hub:read('*a'); hub:close()
+    assert(actionSource:find("type(GameplayFeedback) == 'table'", 1, true),
+        'actions must guard a missing feedback global')
+    assert(actionSource:find('using safe progress fallback', 1, true),
+        'actions must retain a non-crashing progress fallback')
+    assert(hubSource:find("type(GameplayFeedback) == 'table'", 1, true),
+        'Hub must guard a missing feedback global')
+end)
+
 test('procedural gameplay audio stays local compact and reproducible', function()
     local total = 0
     for _, name in ipairs({ 'soil_scrape', 'water_pour', 'granules', 'spray', 'crop_pick' }) do

@@ -2,7 +2,7 @@
 
 ## Automated
 
-- [x] 46+ Lua tests pass (60 current).
+- [x] 46+ Lua tests pass (61 current).
 - [x] Deterministic V3 S24 simulation passes homogeneous and mixed crops at 0/30/60/90/120-second latency.
 - [x] 97 web tests pass; web typecheck, lint and production build pass.
 - [x] 11 minigame tests pass; typecheck, lint and build pass while the feature remains disabled.
