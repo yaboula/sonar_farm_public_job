@@ -138,6 +138,25 @@ Config.Inspection = {
     SevereConditionPercent = 50,
 }
 
+Config.FieldHud = {
+    Enabled = true,
+    Position = 'left-center', -- left-center | top-left
+    ToggleCommand = 'sfpj_field_hud',
+    ToggleKey = 'C',
+    DefaultExpanded = false,
+    RefreshSeconds = 10,
+    UiUpdateMs = 1000,
+    ClassificationMs = 500,
+    StaleSeconds = 25,
+    MarkerTexture = 'slot_marker',
+    MarkerHeight = 0.68,
+    MarkerMinScale = 0.018,
+    MarkerMaxScale = 0.034,
+    MarkerMaxDistance = 180.0,
+    MarkerMinAlpha = 90,
+    MarkerMaxAlpha = 225,
+}
+
 Config.Security = {
     TokenBucket = { capacity = 8, refillPerSecond = 2 },
     SubscriptionBucket = { capacity = 3, refillPerSecond = 1 },

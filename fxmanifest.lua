@@ -16,7 +16,7 @@ shared_scripts {
     'config/config.lua', 'config/crops.lua', 'config/zones.lua', 'config/minigames.lua',
     'data/fields.lua', 'shared/item_catalog.lua', 'shared/constants.lua', 'shared/utils.lua', 'shared/rentals.lua',
     'shared/time.lua', 'shared/crop_clock.lua', 'shared/conditions.lua', 'shared/growth.lua',
-    'shared/physiology.lua', 'shared/inspection.lua', 'shared/zones.lua', 'shared/fields.lua',
+    'shared/physiology.lua', 'shared/inspection.lua', 'shared/field_hud.lua', 'shared/zones.lua', 'shared/fields.lua',
     'shared/config_validation.lua', 'bridge/bridge.lua', 'bridge/frameworks/qbcore.lua',
     'bridge/inventory/ox_inventory.lua', 'bridge/target/ox_target.lua',
 }
@@ -28,6 +28,7 @@ server_scripts {
     'server/modules/farming/lock.lua',
     'server/modules/publicjob/database.lua', 'server/modules/progression/service.lua',
     'server/modules/fields/service.lua', 'server/modules/reservations/service.lua',
+    'server/modules/field_hud/runtime.lua',
     'server/modules/market/service.lua', 'server/modules/sell/service.lua',
     'server/modules/hub/runtime.lua', 'server/modules/state/state.lua',
     'server/modules/security/ratelimit.lua', 'server/modules/security/validation.lua',
@@ -46,6 +47,7 @@ client_scripts {
     'client/modules/interaction/actions.lua',
     'client/modules/minigames/controller.lua', 'client/modules/hub/controller.lua',
     'client/modules/inspection/controller.lua', 'client/modules/zones/slots.lua',
+    'client/modules/field_hud/controller.lua',
     'client/modules/sync/client.lua', 'client/modules/zones/blips.lua',
     'client/modules/admin/permissions.lua', 'client/modules/admin/zone_builder.lua',
     'client/modules/admin/slot_builder.lua', 'client/modules/debug/commands.lua',
@@ -56,5 +58,6 @@ files {
     'nui-shell/index.html',
     'minigames-ui/dist/index.html', 'minigames-ui/dist/assets/**/*',
     'minigames-ui/dist/contracts/**/*', 'inspection-ui/dist/index.html',
-    'inspection-ui/dist/assets/**/*', 'web/build/index.html', 'web/build/assets/**/*',
+    'inspection-ui/dist/assets/**/*', 'field-hud/dist/index.html', 'field-hud/dist/assets/**/*',
+    'web/build/index.html', 'web/build/assets/**/*',
 }

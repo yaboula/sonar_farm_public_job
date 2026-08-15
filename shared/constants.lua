@@ -81,6 +81,7 @@ Constants.CALLBACKS = {
     ADMIN_AUTHORIZED = 'sonar_farm_publicjob:adminAuthorized',
     FIELD_DRAFT_SAVE = 'sonar_farm_publicjob:fieldDraftSave',
     FIELD_CATALOG = 'sonar_farm_publicjob:fieldCatalog',
+    FIELD_HUD_STATE = 'sonar_farm_publicjob:fieldHud:state',
 }
 
 -- Networked event names. Prefixed to avoid collisions with other resources.
@@ -93,6 +94,7 @@ Constants.EVENTS = {
     SYNC_RESET = 'sonar_farm_publicjob:syncReset',
     RUNTIME_READY = 'sonar_farm_publicjob:runtimeReady',
     FIELD_DELTA = 'sonar_farm_publicjob:fieldDelta',
+    FIELD_HUD_INVALIDATE = 'sonar_farm_publicjob:fieldHud:invalidate',
 }
 
 -- Public server events other resources can listen to (platform API).

@@ -381,6 +381,9 @@ function Fields.LoadDetail(source, fieldId)
 end
 
 function Fields.BroadcastInvalidate(fieldId, reason)
+    if FieldHudRuntime and FieldHudRuntime.InvalidateField then
+        FieldHudRuntime.InvalidateField(fieldId, reason)
+    end
     if HubRuntime and HubRuntime.BroadcastInvalidate then
         HubRuntime.BroadcastInvalidate({ scope = 'field', fieldId = fieldId, reason = reason })
     else

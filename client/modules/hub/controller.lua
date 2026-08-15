@@ -39,7 +39,10 @@ RegisterNUICallback('hub:dispatch', function(data, cb)
     if response and response.route then SetNewWaypoint(response.route.x + 0.0, response.route.y + 0.0) end
     if response and response.ok and (intent.type == 'field.reserve' or intent.type == 'field.extend'
         or intent.type == 'field.release' or intent.type == 'coop.accept' or intent.type == 'coop.leave'
-        or intent.type == 'coop.revoke') then Sync.RefreshNow() end
+        or intent.type == 'coop.revoke') then
+        Sync.RefreshNow()
+        if FieldHud and FieldHud.Refresh then FieldHud.Refresh() end
+    end
     reply(cb, response); if response and response.closeSurface then Hub.Close() end
 end)
 RegisterNUICallback('hub:subscribeField', function(data, cb)
@@ -62,7 +65,10 @@ RegisterNetEvent('sonar_farm_publicjob:reservationInvite', function(invite)
         centered = true, cancel = true, labels = { confirm = 'Accept', cancel = 'Decline' } })
     if result == 'confirm' then
         local response = lib.callback.await('sonar_farm_publicjob:reservation:accept', false, invite.id)
-        if response and response.ok then Sync.RefreshNow() end
+        if response and response.ok then
+            Sync.RefreshNow()
+            if FieldHud and FieldHud.Refresh then FieldHud.Refresh() end
+        end
         Bridge.Notify(response and response.ok and 'Field invitation accepted.' or response and response.reason or 'Invitation failed.',
             response and response.ok and 'success' or 'error')
     end

@@ -478,6 +478,27 @@ local function validateInspection(errors)
     end
 end
 
+local function validateFieldHud(errors)
+    local cfg = Config.FieldHud
+    if type(cfg) ~= 'table' then errors[#errors + 1] = 'Config.FieldHud must be a table.'; return end
+    if cfg.Enabled ~= true and cfg.Enabled ~= false then errors[#errors + 1] = 'Config.FieldHud.Enabled must be boolean.' end
+    if cfg.Position ~= 'left-center' and cfg.Position ~= 'top-left' then
+        errors[#errors + 1] = 'Config.FieldHud.Position must be left-center or top-left.'
+    end
+    nonEmptyString(errors, 'Config.FieldHud.ToggleCommand', cfg.ToggleCommand)
+    nonEmptyString(errors, 'Config.FieldHud.ToggleKey', cfg.ToggleKey)
+    for _, key in ipairs({ 'RefreshSeconds', 'UiUpdateMs', 'ClassificationMs', 'StaleSeconds',
+        'MarkerHeight', 'MarkerMinScale', 'MarkerMaxScale', 'MarkerMaxDistance',
+        'MarkerMinAlpha', 'MarkerMaxAlpha' }) do
+        positive(errors, 'Config.FieldHud.' .. key, cfg[key], false)
+    end
+    if finite(cfg.MarkerMinScale) and finite(cfg.MarkerMaxScale) and cfg.MarkerMinScale > cfg.MarkerMaxScale then
+        errors[#errors + 1] = 'Config.FieldHud.MarkerMinScale must not exceed MarkerMaxScale.'
+    end
+    range(errors, 'Config.FieldHud.MarkerMinAlpha', cfg.MarkerMinAlpha, 1, 255)
+    range(errors, 'Config.FieldHud.MarkerMaxAlpha', cfg.MarkerMaxAlpha, 1, 255)
+end
+
 local function validateSection(errors, name, fn, ...)
     local ok, err = pcall(fn, errors, ...)
     if not ok then
@@ -611,6 +632,7 @@ function ConfigValidation.Validate()
     validateSection(errors, 'Minigame', validateMinigames)
     validateSection(errors, 'AdvancedCare', validateAdvancedCare)
     validateSection(errors, 'Inspection', validateInspection)
+    validateSection(errors, 'FieldHud', validateFieldHud)
     validateSection(errors, 'Gameplay', validateGameplay)
     validateSection(errors, 'Fields', validateFields)
     validateSection(errors, 'PublicJob', validatePublicJob)
