@@ -28,6 +28,8 @@ Every streamed slot in the reserved Field receives the same optimized agricultur
 
 The highest-priority nearby actionable slot is statically larger. There is no pulse, sound, particle or physical prop. FiveM projects and tints one 128×128 transparent texture at exact server-loaded slot coordinates; the NUI never receives 24/40/64 coordinates per frame.
 
+The same streamed slots are mirrored as small native GTA blips on the minimap and pause map. Blips inherit the semantic state color, keep the priority slot slightly larger and are removed immediately when the topology changes, leaves streaming range or the reservation ends. They are presentation only and never bypass `ox_target` or server validation.
+
 Ground Z is resolved once when topology is streamed. Classification is cached at `Config.FieldHud.ClassificationMs`; only screen projection and `DrawSprite` remain in the frame loop. Indicators are skipped in interiors and outside `MarkerMaxDistance`.
 
 ## Runtime authority
@@ -40,7 +42,7 @@ Invalidation occurs after reserve, extend, release, grace transition, co-op acce
 
 ## Administrator configuration
 
-`Config.FieldHud.Position` supports `left-center` (default) and `top-left`. Visual distance, scale, alpha, refresh, stale and classification settings are grouped under `Config.FieldHud` in `config/config.lua`. Keep `MarkerMinScale <= MarkerMaxScale`; startup validation fails closed on invalid values.
+`Config.FieldHud.Position` supports `left-center` (default) and `top-left`. Visual distance, scale, alpha, refresh, stale and classification settings are grouped under `Config.FieldHud` in `config/config.lua`. `MapBlipsEnabled` controls the minimap/pause-map layer; `MapBlipShortRange = false` keeps every currently streamed slot visible on both map surfaces. Keep `MarkerMinScale <= MarkerMaxScale` and `MapBlipScale <= MapBlipPriorityScale`; startup validation fails closed on invalid values.
 
 ## In-game acceptance
 
@@ -48,8 +50,8 @@ Before release, validate with the real MySQL Fields:
 
 1. Owner, active guest and departing guest in active and grace reservations.
 2. Duty loss, job change, resource restart, release and expiry purge.
-3. Exactly 24, 40 and 64 projected indicators when each topology is streamed.
-4. Marker alignment, ground snap and ox_target options from different camera angles.
+3. Exactly 24, 40 and 64 projected indicators and matching minimap/pause-map blips when each topology is streamed.
+4. Marker alignment, ground snap, map colors, priority scale and ox_target options from different camera angles.
 5. Hub/minigame suppression and simultaneous Crop Inspection.
 6. 1280×720, 1920×1080 and 2560×1080 with chat and minimap enabled.
 7. L64 resmon average target at or below 0.25 ms and no persistent texture/marker state after reservation end.

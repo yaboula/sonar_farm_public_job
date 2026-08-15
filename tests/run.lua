@@ -152,6 +152,12 @@ test('Field HUD config and lifecycle contracts are wired', function()
     assert(client:find('RegisterKeyMapping', 1, true) and client:find("'fieldHud:mode'", 1, true), 'C mode toggle')
     assert(markers:find('DrawSprite', 1, true) and markers:find('GetScreenCoordFromWorldCoord', 1, true),
         'projected marker renderer')
+    assert(markers:find('AddBlipForCoord', 1, true) and markers:find('SetBlipDisplay', 1, true)
+        and markers:find('clearMapBlips', 1, true), 'reserved slots must appear and clean up on minimap/map')
+    assert(Config.FieldHud.MarkerMaxScale < 0.03 and Config.FieldHud.MarkerGroundScale < 0.60,
+        'world markers remain discreet')
+    assert(Config.FieldHud.MapBlipsEnabled == true and Config.FieldHud.MapBlipScale <= 0.30,
+        'map markers are enabled and compact')
     assert(slots:find('publicJobAvailable', 1, true), 'client target job/duty predicate')
 end)
 

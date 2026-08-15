@@ -482,14 +482,21 @@ local function validateFieldHud(errors)
     local cfg = Config.FieldHud
     if type(cfg) ~= 'table' then errors[#errors + 1] = 'Config.FieldHud must be a table.'; return end
     if cfg.Enabled ~= true and cfg.Enabled ~= false then errors[#errors + 1] = 'Config.FieldHud.Enabled must be boolean.' end
+    if cfg.MapBlipsEnabled ~= true and cfg.MapBlipsEnabled ~= false then
+        errors[#errors + 1] = 'Config.FieldHud.MapBlipsEnabled must be boolean.'
+    end
+    if cfg.MapBlipShortRange ~= true and cfg.MapBlipShortRange ~= false then
+        errors[#errors + 1] = 'Config.FieldHud.MapBlipShortRange must be boolean.'
+    end
     if cfg.Position ~= 'left-center' and cfg.Position ~= 'top-left' then
         errors[#errors + 1] = 'Config.FieldHud.Position must be left-center or top-left.'
     end
     nonEmptyString(errors, 'Config.FieldHud.ToggleCommand', cfg.ToggleCommand)
     nonEmptyString(errors, 'Config.FieldHud.ToggleKey', cfg.ToggleKey)
     for _, key in ipairs({ 'RefreshSeconds', 'UiUpdateMs', 'ClassificationMs', 'StaleSeconds',
-        'MarkerHeight', 'MarkerMinScale', 'MarkerMaxScale', 'MarkerMaxDistance',
-        'MarkerMinAlpha', 'MarkerMaxAlpha' }) do
+        'MarkerHeight', 'MarkerMinScale', 'MarkerMaxScale', 'MarkerPriorityScale', 'MarkerGroundScale',
+        'MarkerMaxDistance', 'MarkerMinAlpha', 'MarkerMaxAlpha', 'MapBlipSprite', 'MapBlipScale',
+        'MapBlipPriorityScale', 'MapBlipAlpha' }) do
         positive(errors, 'Config.FieldHud.' .. key, cfg[key], false)
     end
     if finite(cfg.MarkerMinScale) and finite(cfg.MarkerMaxScale) and cfg.MarkerMinScale > cfg.MarkerMaxScale then
@@ -497,6 +504,11 @@ local function validateFieldHud(errors)
     end
     range(errors, 'Config.FieldHud.MarkerMinAlpha', cfg.MarkerMinAlpha, 1, 255)
     range(errors, 'Config.FieldHud.MarkerMaxAlpha', cfg.MarkerMaxAlpha, 1, 255)
+    range(errors, 'Config.FieldHud.MapBlipAlpha', cfg.MapBlipAlpha, 1, 255)
+    if finite(cfg.MapBlipScale) and finite(cfg.MapBlipPriorityScale)
+        and cfg.MapBlipPriorityScale < cfg.MapBlipScale then
+        errors[#errors + 1] = 'Config.FieldHud.MapBlipPriorityScale must not be smaller than MapBlipScale.'
+    end
 end
 
 local function validateSection(errors, name, fn, ...)

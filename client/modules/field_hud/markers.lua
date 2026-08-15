@@ -3,14 +3,87 @@
 FieldMarkers = FieldMarkers or {}
 
 local authority, markerCache, prioritySlot = nil, {}, nil
+local mapBlips = {}
 local textureDictionary, textureName = 'sfpj_field_hud', Config.FieldHud.MarkerTexture or 'slot_marker'
 local COLORS = {
     empty = { 232, 226, 204 }, healthy = { 121, 168, 77 }, care = { 239, 183, 44 },
     critical = { 228, 91, 49 }, ready = { 255, 205, 42 }, blocked = { 116, 119, 112 },
 }
+local BLIP_COLORS = { empty = 0, healthy = 2, care = 5, critical = 1, ready = 46, blocked = 40 }
 
-function FieldMarkers.SetState(state) authority = state end
-function FieldMarkers.Clear() authority, markerCache, prioritySlot = nil, {}, nil end
+local function clearMapBlips()
+    for key, entry in pairs(mapBlips) do
+        if entry.handle and DoesBlipExist(entry.handle) then RemoveBlip(entry.handle) end
+        mapBlips[key] = nil
+    end
+end
+
+local function mapLabel(marker)
+    local row = marker.rowId and tostring(marker.rowId) or 'Row'
+    return ('Reserved Field - %s / Slot %s - %s'):format(row, tostring(marker.index or marker.id), marker.action)
+end
+
+local function syncMapBlips()
+    if not Config.FieldHud.MapBlipsEnabled then
+        clearMapBlips()
+        return
+    end
+
+    local wanted = {}
+    for _, marker in ipairs(markerCache) do
+        local key = tostring(marker.id or ('%s:%s'):format(marker.zone, marker.index))
+        wanted[key] = true
+        local selected = prioritySlot and prioritySlot.id == marker.id
+        local entry = mapBlips[key]
+        if not entry or not DoesBlipExist(entry.handle) then
+            local handle = AddBlipForCoord(marker.x + 0.0, marker.y + 0.0, marker.z + 0.0)
+            SetBlipSprite(handle, Config.FieldHud.MapBlipSprite or 1)
+            SetBlipDisplay(handle, 2)
+            SetBlipAsShortRange(handle, Config.FieldHud.MapBlipShortRange == true)
+            SetBlipAlpha(handle, Config.FieldHud.MapBlipAlpha or 190)
+            entry = { handle = handle }
+            mapBlips[key] = entry
+        end
+
+        if entry.kind ~= marker.kind then
+            SetBlipColour(entry.handle, BLIP_COLORS[marker.kind] or BLIP_COLORS.blocked)
+            entry.kind = marker.kind
+        end
+        if entry.action ~= marker.action then
+            BeginTextCommandSetBlipName('STRING')
+            AddTextComponentSubstringPlayerName(mapLabel(marker))
+            EndTextCommandSetBlipName(entry.handle)
+            entry.action = marker.action
+        end
+        if entry.selected ~= selected then
+            SetBlipScale(entry.handle, selected
+                and (Config.FieldHud.MapBlipPriorityScale or 0.32)
+                or (Config.FieldHud.MapBlipScale or 0.26))
+            entry.selected = selected
+        end
+    end
+
+    for key, entry in pairs(mapBlips) do
+        if not wanted[key] then
+            if entry.handle and DoesBlipExist(entry.handle) then RemoveBlip(entry.handle) end
+            mapBlips[key] = nil
+        end
+    end
+end
+
+function FieldMarkers.SetState(state)
+    local previousField = authority and authority.field and authority.field.id
+    local nextField = state and state.field and state.field.id
+    if previousField and previousField ~= nextField then
+        markerCache, prioritySlot = {}, nil
+        clearMapBlips()
+    end
+    authority = state
+end
+function FieldMarkers.Clear()
+    authority, markerCache, prioritySlot = nil, {}, nil
+    clearMapBlips()
+end
 
 function FieldMarkers.Snapshot()
     local counts = { empty = 0, healthy = 0, care = 0, critical = 0, ready = 0, blocked = 0, own = 0 }
@@ -25,7 +98,10 @@ local function rebuild()
     markerCache, prioritySlot = {}, nil
     if not authority or not authority.field then return end
     local field = Slots.HudSnapshot()[authority.field.id]
-    if not field then return end
+    if not field then
+        syncMapBlips()
+        return
+    end
     local coords = GetEntityCoords(PlayerPedId())
     local allowed = authority.access and authority.access.allowed == true
     local entries = {}
@@ -51,6 +127,7 @@ local function rebuild()
         markerCache[#markerCache + 1], entries[#entries + 1] = entry, entry
     end
     prioritySlot = Sonar.FieldHud.Prioritize(entries)
+    syncMapBlips()
 end
 
 CreateThread(function()
@@ -75,11 +152,16 @@ CreateThread(function()
                         local ratio = math.max(0, math.min(1, distance / Config.FieldHud.MarkerMaxDistance))
                         local scale = Config.FieldHud.MarkerMaxScale
                             - (Config.FieldHud.MarkerMaxScale - Config.FieldHud.MarkerMinScale) * ratio
-                        if prioritySlot and prioritySlot.id == marker.id then scale = math.min(scale * 1.32, 0.045) end
+                        if prioritySlot and prioritySlot.id == marker.id then
+                            scale = math.min(scale * (Config.FieldHud.MarkerPriorityScale or 1.22), 0.036)
+                        end
                         local alpha = math.floor(Config.FieldHud.MarkerMaxAlpha
                             - (Config.FieldHud.MarkerMaxAlpha - Config.FieldHud.MarkerMinAlpha) * ratio)
                         local color = COLORS[marker.kind] or COLORS.blocked
-                        DrawMarker(27, marker.x, marker.y, marker.z + 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.75, 0.75, 0.75, color[1], color[2], color[3], math.min(180, alpha), false, false, 2, nil, nil, false)
+                        local groundScale = Config.FieldHud.MarkerGroundScale or 0.58
+                        DrawMarker(27, marker.x, marker.y, marker.z + 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                            groundScale, groundScale, groundScale, color[1], color[2], color[3],
+                            math.min(180, alpha), false, false, 2, nil, nil, false)
                         DrawSprite(textureDictionary, textureName, sx, sy, scale, scale * 1.7778,
                             0.0, color[1], color[2], color[3], alpha)
                     end

@@ -150,11 +150,19 @@ Config.FieldHud = {
     StaleSeconds = 25,
     MarkerTexture = 'slot_marker',
     MarkerHeight = 0.68,
-    MarkerMinScale = 0.018,
-    MarkerMaxScale = 0.034,
+    MarkerMinScale = 0.015,
+    MarkerMaxScale = 0.028,
+    MarkerPriorityScale = 1.22,
+    MarkerGroundScale = 0.58,
     MarkerMaxDistance = 180.0,
     MarkerMinAlpha = 90,
     MarkerMaxAlpha = 225,
+    MapBlipsEnabled = true,
+    MapBlipSprite = 1,
+    MapBlipScale = 0.26,
+    MapBlipPriorityScale = 0.32,
+    MapBlipAlpha = 190,
+    MapBlipShortRange = false,
 }
 
 Config.Security = {
