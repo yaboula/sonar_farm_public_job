@@ -16,6 +16,7 @@ This is an independent sibling of `sonar_farm`. It does not read, migrate or mod
 - Quality-priced central Sell NPC with producer/resource metadata enforcement.
 - Durable economy operation IDs, receipts, compensation outbox and reconciliation.
 - Advanced crop care and Inspection HUD retained. Minigames ship as disabled future code.
+- Persistent Field Operations HUD with compact/expanded `C` modes and semantic indicators for every streamed slot in the reserved Field.
 
 Company, treasury, warehouse, P2P marketplace, staff, contracts, cargo, seasons, freshness and translations are outside v1.
 
@@ -67,6 +68,8 @@ npm run build
 ```
 
 Run the same typecheck/lint/test/build sequence in `inspection-ui` and `minigames-ui`. The initial release remains `0.1.0`; create `v0.1.0` only after the multi-client FiveM E2E and all world placements are signed off.
+
+Run the same sequence in `field-hud`. The passive HUD is documented in [Field Operations HUD](docs/FIELD_OPERATIONS_HUD.md); it never takes NUI focus and its indicators never replace server or ox_target authority.
 
 Gameplay actions are pure animation-dictionary clips configured under `Config.Gameplay.ActionFeedback`; they create no action props, audio, particles or GTA scenarios. The runtime aligns each action to complete animation cycles and uses exactly the same effective duration for playback and the progress UI. The global action lock remains held through the authoritative server response. V3 care balance and its compatibility boundary are documented in [Gameplay balance](docs/GAMEPLAY_BALANCE_V3.md).
 

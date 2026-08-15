@@ -2,11 +2,12 @@
 
 ## Automated
 
-- [x] 46+ Lua tests pass (61 current).
+- [x] 46+ Lua tests pass (65 current).
 - [x] Deterministic V3 S24 simulation passes homogeneous and mixed crops at 0/30/60/90/120-second latency.
 - [x] 104 web tests pass; web typecheck, lint, Sites contract and production build pass.
 - [x] 11 minigame tests pass; typecheck, lint and build pass while the feature remains disabled.
 - [x] 8 Inspection tests pass; typecheck, lint, production contract and build pass.
+- [x] Field Operations HUD typecheck, lint, 7 component/contract tests, production contract and build pass.
 - [x] Generated ox_inventory catalog is current.
 - [x] No legacy `sf_*` business table or `sonar_farm` runtime dependency remains.
 
@@ -34,6 +35,7 @@
 - [ ] No topology overlap; L64 culling, prop pool and target counts remain stable.
 - [ ] Hub and crop rendering are checked at 720p, 1080p and ultrawide.
 - [ ] Client/server resmon and FPS are acceptable with a full L64 Field.
+- [ ] Field HUD shows all 64 exact slot indicators, averages at most 0.25 ms, survives duty/job changes and clears after release/purge.
 - [ ] All six action clips and synchronized durations are approved on freemode male/female without sliding or abrupt truncation.
 - [ ] Cancel, death, distance, vehicle, duty loss and resource stop clear the active animation and release the action lock.
 - [ ] A second farming action and Hub open are rejected until the first action and its server response finish.
