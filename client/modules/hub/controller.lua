@@ -11,10 +11,13 @@ function Hub.Close()
 end
 
 function Hub.Open(surface, presence, marketId)
-    local feedbackActive = type(GameplayFeedback) == 'table'
-        and type(GameplayFeedback.IsActive) == 'function'
-        and GameplayFeedback.IsActive()
-    if active or Minigame.IsActive() or feedbackActive then return end
+    local farmingActionActive = type(Actions) == 'table'
+        and type(Actions.IsBusy) == 'function'
+        and Actions.IsBusy()
+    if farmingActionActive then
+        return Bridge.Notify('Finish the current farming action first.', 'warning')
+    end
+    if active or Minigame.IsActive() then return end
     if Inspection and Inspection.IsActive() then Inspection.Close('hub_open') end
     local response = lib.callback.await(CALLBACKS.HUB_OPEN, false,
         { surface = surface, presence = presence, marketId = marketId })

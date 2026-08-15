@@ -579,8 +579,7 @@ end
 local function validateGameplay(errors)
     local gameplay = Config.Gameplay
     if type(gameplay) ~= 'table' then errors[#errors + 1] = 'Config.Gameplay must be a table.'; return end
-    range(errors, 'Config.Gameplay.FeedbackVolume', gameplay.FeedbackVolume, 0, 1)
-    positive(errors, 'Config.Gameplay.FeedbackLoadTimeoutMs', gameplay.FeedbackLoadTimeoutMs, false)
+    positive(errors, 'Config.Gameplay.AnimationLoadTimeoutMs', gameplay.AnimationLoadTimeoutMs, false)
     positive(errors, 'Config.Gameplay.FeedbackCancelDistance', gameplay.FeedbackCancelDistance, false)
     local durations = { plant = 3200, water = 2800, fertilize = 2600,
         weed = 3000, treat_pest = 2600, harvest = 2800 }
@@ -593,14 +592,11 @@ local function validateGameplay(errors)
             if feedback.duration ~= durations[action] then
                 errors[#errors + 1] = ('%s.duration must be %d milliseconds.'):format(path, durations[action])
             end
-            if not feedback.scenario and not feedback.fallbackScenario
-                and not (feedback.anim and feedback.anim.dict and feedback.anim.clip) then
-                errors[#errors + 1] = path .. ' requires an animation or scenario.'
+            if not (feedback.anim and feedback.anim.dict and feedback.anim.clip) then
+                errors[#errors + 1] = path .. ' requires a pure animation dictionary and clip.'
             end
-            if feedback.sound then nonEmptyString(errors, path .. '.sound.id', feedback.sound.id) end
-            if feedback.particle then
-                nonEmptyString(errors, path .. '.particle.asset', feedback.particle.asset)
-                nonEmptyString(errors, path .. '.particle.name', feedback.particle.name)
+            if feedback.scenario or feedback.fallbackScenario or feedback.prop or feedback.sound or feedback.particle then
+                errors[#errors + 1] = path .. ' must remain animation-only.'
             end
         end
     end

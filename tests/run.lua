@@ -137,33 +137,30 @@ test('public-job runtime streams topology without company schema', function()
         'versioned topology and economy recovery outbox tables are required')
 end)
 
-test('gameplay feedback defines six distinct actions and guaranteed cleanup', function()
+test('gameplay feedback defines six animation-only actions with synchronized duration', function()
     local expectedDurations = {
         plant = 3200, water = 2800, fertilize = 2600,
         weed = 3000, treat_pest = 2600, harvest = 2800,
     }
-    local soundIds = {}
     for action, duration in pairs(expectedDurations) do
         local feedback = assert(Config.Gameplay.ActionFeedback[action], action .. ' feedback')
         equal(feedback.duration, duration, action .. ' duration')
-        assert(feedback.anim or feedback.scenario, action .. ' animation')
-        assert(feedback.sound and feedback.sound.id, action .. ' local audio')
-        assert(not soundIds[feedback.sound.id]
-            or (feedback.sound.id == 'soil_scrape'
-                and ((soundIds[feedback.sound.id] == 'plant' and action == 'weed')
-                    or (soundIds[feedback.sound.id] == 'weed' and action == 'plant'))),
-            'only Plant and Weed may share the scrape sound')
-        soundIds[feedback.sound.id] = action
-        assert(feedback.particle, action .. ' local particle contract')
+        assert(feedback.anim and feedback.anim.dict and feedback.anim.clip, action .. ' pure animation')
+        equal(feedback.scenario, nil, action .. ' must not start a GTA scenario')
+        equal(feedback.prop, nil, action .. ' must not create an action prop')
+        equal(feedback.sound, nil, action .. ' must not play action audio')
+        equal(feedback.particle, nil, action .. ' must not start action particles')
     end
-    equal(Config.Gameplay.ActionFeedback.harvest.prop, nil, 'harvest must use hands, never a planting tool')
     local file = assert(io.open('client/modules/interaction/feedback.lua', 'rb'))
     local source = file:read('*a'); file:close()
     for _, contract in ipairs({ 'already_active', 'IsEntityDead', 'IsPedInAnyVehicle',
-        'FeedbackCancelDistance', 'lib.cancelProgress()', 'DeleteEntity(session.prop)',
-        "sound(session, 'stop')", 'StopParticleFxLooped', 'onResourceStop',
-        'sfpj_action_preview', 'Admin.RequireAuthorization', "RegisterNUICallback('gameplay:warning'" }) do
+        'FeedbackCancelDistance', 'lib.cancelProgress()', 'GetAnimDuration',
+        'nativeDuration * cycles', 'session.duration', 'StopAnimTask', 'onResourceStop',
+        'sfpj_action_preview', 'Admin.RequireAuthorization' }) do
         assert(source:find(contract, 1, true), 'missing feedback lifecycle contract: ' .. contract)
+    end
+    for _, forbidden in ipairs({ 'CreateObject', 'SendNUIMessage', 'ParticleFx', 'TaskStartScenario' }) do
+        assert(not source:find(forbidden, 1, true), 'animation-only controller contains: ' .. forbidden)
     end
 end)
 
@@ -176,26 +173,22 @@ test('gameplay actions fail soft when a partial deploy omits the feedback contro
         'actions must guard a missing feedback global')
     assert(actionSource:find('using safe progress fallback', 1, true),
         'actions must retain a non-crashing progress fallback')
-    assert(hubSource:find("type(GameplayFeedback) == 'table'", 1, true),
-        'Hub must guard a missing feedback global')
+    assert(hubSource:find("type(Actions) == 'table'", 1, true)
+        and hubSource:find('Actions.IsBusy()', 1, true),
+        'Hub must use the guarded full action mutex')
 end)
 
-test('procedural gameplay audio stays local compact and reproducible', function()
-    local total = 0
-    for _, name in ipairs({ 'soil_scrape', 'water_pour', 'granules', 'spray', 'crop_pick' }) do
-        local file = assert(io.open('nui-shell/audio/' .. name .. '.ogg', 'rb'))
-        local header = file:read(4)
-        local size = assert(file:seek('end'))
-        file:close()
-        equal(header, 'OggS', name .. ' OGG header')
-        assert(size > 0 and size < 100000, name .. ' should remain a compact local effect')
-        total = total + size
-    end
-    assert(total < 500000, 'all gameplay audio must remain below 500 KB')
-    local generator = assert(io.open('scripts/generate_gameplay_audio.py', 'rb'))
-    local source = generator:read('*a'); generator:close()
-    assert(source:find('RATE = 48_000', 1, true), 'audio generator must stay mono 48 kHz')
-    assert(source:find('loudnorm=I=-16', 1, true), 'audio generator must normalize near -16 LUFS')
+test('gameplay action mutex spans animation and authoritative callback', function()
+    local file = assert(io.open('client/modules/interaction/actions.lua', 'rb'))
+    local source = file:read('*a'); file:close()
+    local lock = assert(source:find('actionInFlight = true', 1, true), 'action mutex must be acquired')
+    local callback = assert(source:find('lib.callback.await(callbackName', lock, true),
+        'server callback must execute inside the mutex')
+    local unlock = assert(source:find('actionInFlight = false', callback, true),
+        'action mutex must release after the callback')
+    assert(lock < callback and callback < unlock, 'action mutex ordering must cover animation and callback')
+    assert(source:find('Finish the current farming action first.', 1, true), 'busy action rejection is required')
+    assert(source:find('function Actions.IsBusy()', 1, true), 'shared action busy state is required')
 end)
 
 test('invalid operational config is rejected', function()

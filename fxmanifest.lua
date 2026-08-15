@@ -53,7 +53,7 @@ client_scripts {
 
 ui_page 'nui-shell/index.html'
 files {
-    'nui-shell/index.html', 'nui-shell/audio/*.ogg',
+    'nui-shell/index.html',
     'minigames-ui/dist/index.html', 'minigames-ui/dist/assets/**/*',
     'minigames-ui/dist/contracts/**/*', 'inspection-ui/dist/index.html',
     'inspection-ui/dist/assets/**/*', 'web/build/index.html', 'web/build/assets/**/*',

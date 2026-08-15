@@ -78,6 +78,7 @@ local STALE_CACHE_REASONS = {
 -- Seed item -> crop type, built once from the crop definitions.
 local seedToCrop = {}
 local feedbackFallbackWarned = false
+local actionInFlight = false
 for cropType, def in pairs(Config.Crops or {}) do
     if def.seedItem then
         seedToCrop[def.seedItem] = cropType
@@ -112,9 +113,8 @@ local function actionProgress(label, action)
         return GameplayFeedback.Run(label, action)
     end
 
-    -- Keep farming usable if a server deploys actions.lua before the new
-    -- feedback controller or FiveM is still holding an older manifest cache.
-    -- A complete resource restart will restore props, audio and VFX.
+    -- Keep farming usable if a server deploys actions.lua before the animation
+    -- controller or FiveM is still holding an older manifest cache.
     if not feedbackFallbackWarned then
         feedbackFallbackWarned = true
         Bridge.Log('warn', 'Gameplay feedback controller is not loaded; using safe progress fallback. Restart the resource after deploying every file.')
@@ -129,6 +129,48 @@ local function actionProgress(label, action)
         canCancel = true,
         disable = { move = true, car = true, combat = true, sprint = true },
     }) == true
+end
+
+local function isActionBusy()
+    local feedbackActive = type(GameplayFeedback) == 'table'
+        and type(GameplayFeedback.IsActive) == 'function'
+        and GameplayFeedback.IsActive()
+    return actionInFlight or feedbackActive
+end
+
+local function rejectBusyAction()
+    if not isActionBusy() then return false end
+    Bridge.Notify('Finish the current farming action first.', NOTIFY.WARNING)
+    return true
+end
+
+---@param label string
+---@param action string
+---@param callbackName string
+---@param payload table
+---@return table|nil response
+---@return boolean submitted
+local function executeAction(label, action, callbackName, payload)
+    if rejectBusyAction() then return nil, false end
+
+    actionInFlight = true
+    local ok, completed, response = pcall(function()
+        if not actionProgress(label, action) then return false, nil end
+        return true, lib.callback.await(callbackName, false, payload)
+    end)
+    actionInFlight = false
+
+    if not ok then
+        Bridge.Log('error', ('Farming action %s failed: %s'):format(action, tostring(completed)))
+        Bridge.Notify(MESSAGES[REJECT.INTERNAL_ERROR], NOTIFY.ERROR)
+        return nil, false
+    end
+    if not completed then return nil, false end
+    return response, true
+end
+
+function Actions.IsBusy()
+    return isActionBusy()
 end
 
 -- ---------------------------------------------------------------------------
@@ -154,16 +196,12 @@ function Actions.Plant(cropType, zoneKey, slotIndex)
         return Minigame.Begin(cropType, zoneKey, tonumber(slotIndex))
     end
 
-    if not actionProgress(('Planting %s...'):format(def.label), 'plant') then
-        return
-    end
-
-    local response = lib.callback.await(CALLBACKS.PLANT, false, {
+    local response, submitted = executeAction(('Planting %s...'):format(def.label), 'plant', CALLBACKS.PLANT, {
         cropType = cropType,
         zone = zoneKey,
         slot = tonumber(slotIndex),
     })
-
+    if not submitted then return end
     if not response or not response.ok then
         return handleRejection(response)
     end
@@ -180,12 +218,9 @@ end
 ---@param cropId string
 function Actions.Water(cropId, itemId)
     if not cropId then return end
-
-    if not actionProgress('Watering...', 'water') then
-        return
-    end
-
-    local response = lib.callback.await(CALLBACKS.WATER, false, { cropId = cropId, itemId = itemId })
+    local response, submitted = executeAction('Watering...', 'water', CALLBACKS.WATER,
+        { cropId = cropId, itemId = itemId })
+    if not submitted then return end
     if not response or not response.ok then
         return handleRejection(response)
     end
@@ -196,23 +231,29 @@ function Actions.Water(cropId, itemId)
 end
 
 function Actions.Fertilize(cropId, itemId)
-    if not cropId or not actionProgress('Fertilizing...', 'fertilize') then return end
-    local response = lib.callback.await(CALLBACKS.FERTILIZE, false, { cropId = cropId, itemId = itemId })
+    if not cropId then return end
+    local response, submitted = executeAction('Fertilizing...', 'fertilize', CALLBACKS.FERTILIZE,
+        { cropId = cropId, itemId = itemId })
+    if not submitted then return end
     if not response or not response.ok then return handleRejection(response) end
     Bridge.Notify(('Fertilized. Nutrients %s%%.'):format(response.data.nutrients), NOTIFY.SUCCESS)
 end
 
 function Actions.Weed(cropId, itemId)
-    if not cropId or not actionProgress('Removing weeds...', 'weed') then return end
-    local response = lib.callback.await(CALLBACKS.WEED, false, { cropId = cropId, itemId = itemId })
+    if not cropId then return end
+    local response, submitted = executeAction('Removing weeds...', 'weed', CALLBACKS.WEED,
+        { cropId = cropId, itemId = itemId })
+    if not submitted then return end
     if not response or not response.ok then return handleRejection(response) end
     Bridge.Notify(('Weeded. Cover %s%%.'):format(response.data.weedCover), NOTIFY.SUCCESS)
     if response.data.toolBroken then Bridge.Notify('The tool reached the end of its service life.', NOTIFY.WARNING) end
 end
 
 function Actions.TreatPests(cropId, itemId)
-    if not cropId or not actionProgress('Treating pests...', 'treat_pest') then return end
-    local response = lib.callback.await(CALLBACKS.TREAT_PEST, false, { cropId = cropId, itemId = itemId })
+    if not cropId then return end
+    local response, submitted = executeAction('Treating pests...', 'treat_pest', CALLBACKS.TREAT_PEST,
+        { cropId = cropId, itemId = itemId })
+    if not submitted then return end
     if not response or not response.ok then return handleRejection(response) end
     Bridge.Notify(('Treated. Pest pressure %s%%.'):format(response.data.pestPressure), NOTIFY.SUCCESS)
 end
@@ -265,6 +306,7 @@ local function careDescription(action, option)
 end
 
 function Actions.OpenCareMenu(action, cropId)
+    if rejectBusyAction() then return end
     if Inspection and Inspection.IsActive() then Inspection.Close('action') end
     local execute = CARE_ACTION[action]
     if not execute or not cropId then return end
@@ -294,11 +336,9 @@ function Actions.Harvest(cropId)
     if Inspection and Inspection.IsActive() then Inspection.Close('action') end
     if not cropId then return end
 
-    if not actionProgress('Harvesting...', 'harvest') then
-        return
-    end
-
-    local response = lib.callback.await(CALLBACKS.HARVEST, false, { cropId = cropId })
+    local response, submitted = executeAction('Harvesting...', 'harvest', CALLBACKS.HARVEST,
+        { cropId = cropId })
+    if not submitted then return end
     if not response or not response.ok then
         return handleRejection(response)
     end
@@ -321,6 +361,7 @@ end
 ---@param zoneKey string
 ---@param slotIndex number
 function Actions.OpenPlantMenu(zoneKey, slotIndex)
+    if rejectBusyAction() then return end
     if Inspection and Inspection.IsActive() then Inspection.Close('action') end
     if Crops.IsSlotOccupied(zoneKey, slotIndex) then
         return Bridge.Notify(MESSAGES[REJECT.SLOT_OCCUPIED], NOTIFY.ERROR)

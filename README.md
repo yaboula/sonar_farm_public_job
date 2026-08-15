@@ -68,7 +68,7 @@ npm run build
 
 Run the same typecheck/lint/test/build sequence in `inspection-ui` and `minigames-ui`. The initial release remains `0.1.0`; create `v0.1.0` only after the multi-client FiveM E2E and all world placements are signed off.
 
-Gameplay actions are configured under `Config.Gameplay.ActionFeedback`. The bundled local OGG effects can be reproduced with `scripts/generate_gameplay_audio.py` and a local FFmpeg binary. V3 care balance and its compatibility boundary are documented in [Gameplay balance](docs/GAMEPLAY_BALANCE_V3.md).
+Gameplay actions are pure animation-dictionary clips configured under `Config.Gameplay.ActionFeedback`; they create no action props, audio, particles or GTA scenarios. The runtime aligns each action to complete animation cycles and uses exactly the same effective duration for playback and the progress UI. The global action lock remains held through the authoritative server response. V3 care balance and its compatibility boundary are documented in [Gameplay balance](docs/GAMEPLAY_BALANCE_V3.md).
 
 ## Provenance
 

@@ -76,7 +76,7 @@ Diagnostic commands are registered only while `Config.Debug = true` and still re
 
 The supported rental keys are exactly `1`, `3`, `6` and `8`, with `MaximumRemainingSeconds = 28800`. Do not restore the old 12/24-hour keys: existing database reservations continue to their original expiry without needing those plans in configuration.
 
-Action audio is shipped as local NUI OGG files and adds no server dependency. Before production, use the ACE-protected preview command to approve every configured clip and prop offset on freemode male and female characters. Keep `Config.Debug = false` for players.
+Farming actions use pure animation-dictionary clips only: they do not load action props, audio, particles or GTA scenarios. Before production, use the ACE-protected preview command to approve every configured clip and its synchronized whole-cycle duration on freemode male and female characters. Keep `Config.Debug = false` for players.
 
 ## Start order and smoke test
 
