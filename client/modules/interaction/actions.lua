@@ -144,17 +144,96 @@ local function rejectBusyAction()
     return true
 end
 
+local function playerCanApproach(ped)
+    if not ped or ped == 0 or PlayerPedId() ~= ped or IsEntityDead(ped) or IsPedRagdoll(ped)
+        or IsPedInAnyVehicle(ped, false) then return false end
+    local data = Bridge.GetPlayerData() or {}
+    local job = data.job or {}
+    return job.name == Config.Job.Name and (not Config.Job.RequireDuty or job.onduty == true)
+end
+
+local function headingDifference(left, right)
+    return math.abs(((left - right + 180.0) % 360.0) - 180.0)
+end
+
+---@param slot table authoritative streamed slot
+---@return boolean reached
+local function approachSlot(slot)
+    if not slot or not tonumber(slot.x) or not tonumber(slot.y) or not tonumber(slot.z) then
+        Bridge.Notify(MESSAGES[REJECT.SLOT_NOT_FOUND], NOTIFY.ERROR)
+        return false
+    end
+
+    local ped = PlayerPedId()
+    if not playerCanApproach(ped) then return false end
+    local standOff = tonumber(Config.Gameplay.ApproachStandOffDistance) or 0.58
+    local radians = math.rad(tonumber(slot.heading) or 0.0)
+    local targetX = slot.x + math.sin(radians) * standOff
+    local targetY = slot.y - math.cos(radians) * standOff
+    local targetZ = slot.markerZ or slot.z
+    local targetHeading = GetHeadingFromVector_2d(slot.x - targetX, slot.y - targetY)
+    local tolerance = tonumber(Config.Gameplay.ApproachTolerance) or 0.10
+    local deadline = GetGameTimer() + (tonumber(Config.Gameplay.ApproachTimeoutMs) or 4500)
+    local reached = false
+
+    TaskGoStraightToCoord(ped, targetX, targetY, targetZ,
+        tonumber(Config.Gameplay.ApproachSpeed) or 1.0,
+        tonumber(Config.Gameplay.ApproachTimeoutMs) or 4500, targetHeading, 0.05)
+    while GetGameTimer() < deadline do
+        if not playerCanApproach(ped) then
+            ClearPedTasks(ped)
+            return false
+        end
+        local coords = GetEntityCoords(ped)
+        local dx, dy = coords.x - targetX, coords.y - targetY
+        if dx * dx + dy * dy <= tolerance * tolerance then
+            reached = true
+            break
+        end
+        Wait(50)
+    end
+    ClearPedTasks(ped)
+    if not reached then
+        Bridge.Notify('The selected plot could not be reached.', NOTIFY.WARNING)
+        return false
+    end
+
+    TaskAchieveHeading(ped, targetHeading, tonumber(Config.Gameplay.ApproachTimeoutMs) or 4500)
+    while GetGameTimer() < deadline
+        and headingDifference(GetEntityHeading(ped), targetHeading)
+            > (tonumber(Config.Gameplay.ApproachHeadingTolerance) or 5.0) do
+        if not playerCanApproach(ped) then
+            ClearPedTasks(ped)
+            return false
+        end
+        Wait(25)
+    end
+    ClearPedTasks(ped)
+    SetEntityHeading(ped, targetHeading)
+    return true
+end
+
+local function cropSlot(cropId)
+    local crop = cropId and Crops.Get(cropId)
+    if not crop then return nil end
+    return Slots.Get(crop.zone, crop.slot) or {
+        zone = crop.zone, index = crop.slot,
+        x = crop.pos_x, y = crop.pos_y, z = crop.pos_z, heading = crop.heading,
+    }
+end
+
 ---@param label string
 ---@param action string
 ---@param callbackName string
 ---@param payload table
 ---@return table|nil response
 ---@return boolean submitted
-local function executeAction(label, action, callbackName, payload)
+local function executeAction(label, action, callbackName, payload, slot)
     if rejectBusyAction() then return nil, false end
 
     actionInFlight = true
     local ok, completed, response = pcall(function()
+        if not approachSlot(slot) then return false, nil end
         if not actionProgress(label, action) then return false, nil end
         return true, lib.callback.await(callbackName, false, payload)
     end)
@@ -191,6 +270,8 @@ function Actions.Plant(cropType, zoneKey, slotIndex)
     if type(zoneKey) ~= 'string' or not tonumber(slotIndex) then
         return Bridge.Notify(MESSAGES[REJECT.SLOT_NOT_FOUND], NOTIFY.ERROR)
     end
+    local slot = Slots.Get(zoneKey, tonumber(slotIndex))
+    if not slot then return Bridge.Notify(MESSAGES[REJECT.SLOT_NOT_FOUND], NOTIFY.ERROR) end
 
     if Config.Features.Minigames and def.requiresMinigame then
         return Minigame.Begin(cropType, zoneKey, tonumber(slotIndex))
@@ -200,7 +281,7 @@ function Actions.Plant(cropType, zoneKey, slotIndex)
         cropType = cropType,
         zone = zoneKey,
         slot = tonumber(slotIndex),
-    })
+    }, slot)
     if not submitted then return end
     if not response or not response.ok then
         return handleRejection(response)
@@ -218,8 +299,10 @@ end
 ---@param cropId string
 function Actions.Water(cropId, itemId)
     if not cropId then return end
+    local slot = cropSlot(cropId)
+    if not slot then return handleRejection({ reason = REJECT.CROP_NOT_FOUND }) end
     local response, submitted = executeAction('Watering...', 'water', CALLBACKS.WATER,
-        { cropId = cropId, itemId = itemId })
+        { cropId = cropId, itemId = itemId }, slot)
     if not submitted then return end
     if not response or not response.ok then
         return handleRejection(response)
@@ -232,8 +315,10 @@ end
 
 function Actions.Fertilize(cropId, itemId)
     if not cropId then return end
+    local slot = cropSlot(cropId)
+    if not slot then return handleRejection({ reason = REJECT.CROP_NOT_FOUND }) end
     local response, submitted = executeAction('Fertilizing...', 'fertilize', CALLBACKS.FERTILIZE,
-        { cropId = cropId, itemId = itemId })
+        { cropId = cropId, itemId = itemId }, slot)
     if not submitted then return end
     if not response or not response.ok then return handleRejection(response) end
     Bridge.Notify(('Fertilized. Nutrients %s%%.'):format(response.data.nutrients), NOTIFY.SUCCESS)
@@ -241,8 +326,10 @@ end
 
 function Actions.Weed(cropId, itemId)
     if not cropId then return end
+    local slot = cropSlot(cropId)
+    if not slot then return handleRejection({ reason = REJECT.CROP_NOT_FOUND }) end
     local response, submitted = executeAction('Removing weeds...', 'weed', CALLBACKS.WEED,
-        { cropId = cropId, itemId = itemId })
+        { cropId = cropId, itemId = itemId }, slot)
     if not submitted then return end
     if not response or not response.ok then return handleRejection(response) end
     Bridge.Notify(('Weeded. Cover %s%%.'):format(response.data.weedCover), NOTIFY.SUCCESS)
@@ -251,8 +338,10 @@ end
 
 function Actions.TreatPests(cropId, itemId)
     if not cropId then return end
+    local slot = cropSlot(cropId)
+    if not slot then return handleRejection({ reason = REJECT.CROP_NOT_FOUND }) end
     local response, submitted = executeAction('Treating pests...', 'treat_pest', CALLBACKS.TREAT_PEST,
-        { cropId = cropId, itemId = itemId })
+        { cropId = cropId, itemId = itemId }, slot)
     if not submitted then return end
     if not response or not response.ok then return handleRejection(response) end
     Bridge.Notify(('Treated. Pest pressure %s%%.'):format(response.data.pestPressure), NOTIFY.SUCCESS)
@@ -335,9 +424,11 @@ end
 function Actions.Harvest(cropId)
     if Inspection and Inspection.IsActive() then Inspection.Close('action') end
     if not cropId then return end
+    local slot = cropSlot(cropId)
+    if not slot then return handleRejection({ reason = REJECT.CROP_NOT_FOUND }) end
 
     local response, submitted = executeAction('Harvesting...', 'harvest', CALLBACKS.HARVEST,
-        { cropId = cropId })
+        { cropId = cropId }, slot)
     if not submitted then return end
     if not response or not response.ok then
         return handleRejection(response)

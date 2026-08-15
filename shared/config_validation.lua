@@ -488,6 +488,9 @@ local function validateFieldHud(errors)
     if cfg.MapBlipShortRange ~= true and cfg.MapBlipShortRange ~= false then
         errors[#errors + 1] = 'Config.FieldHud.MapBlipShortRange must be boolean.'
     end
+    if cfg.MarkerGroundOnlyPriority ~= true and cfg.MarkerGroundOnlyPriority ~= false then
+        errors[#errors + 1] = 'Config.FieldHud.MarkerGroundOnlyPriority must be boolean.'
+    end
     if cfg.Position ~= 'left-center' and cfg.Position ~= 'top-left' then
         errors[#errors + 1] = 'Config.FieldHud.Position must be left-center or top-left.'
     end
@@ -614,6 +617,10 @@ local function validateGameplay(errors)
     if type(gameplay) ~= 'table' then errors[#errors + 1] = 'Config.Gameplay must be a table.'; return end
     positive(errors, 'Config.Gameplay.AnimationLoadTimeoutMs', gameplay.AnimationLoadTimeoutMs, false)
     positive(errors, 'Config.Gameplay.FeedbackCancelDistance', gameplay.FeedbackCancelDistance, false)
+    for _, key in ipairs({ 'ApproachTimeoutMs', 'ApproachSpeed', 'ApproachStandOffDistance',
+        'ApproachTolerance', 'ApproachHeadingTolerance' }) do
+        positive(errors, 'Config.Gameplay.' .. key, gameplay[key], false)
+    end
     local durations = { plant = 3200, water = 2800, fertilize = 2600,
         weed = 3000, treat_pest = 2600, harvest = 2800 }
     for _, action in ipairs({ 'plant', 'water', 'fertilize', 'weed', 'treat_pest', 'harvest' }) do

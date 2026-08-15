@@ -267,6 +267,18 @@ end
 -- Public API
 -- ---------------------------------------------------------------------------
 
+--- Exact streamed slot selected by ox_target, with legacy configured fallback.
+---@param zoneKey string
+---@param index number
+---@return table|nil slot
+function Slots.Get(zoneKey, index)
+    index = tonumber(index)
+    if type(zoneKey) ~= 'string' or not index then return nil end
+    local entry = registered[keyOf(zoneKey, index)]
+    if entry and entry.slot then return entry.slot end
+    return Sonar.Zones.Slot(zoneKey, index)
+end
+
 --- Nearest empty slot to the player within `radius`.
 ---@param coords vector3
 ---@param radius? number
