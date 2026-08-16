@@ -3,7 +3,8 @@
 FieldHud = FieldHud or {}
 
 local CALLBACKS, EVENTS = Sonar.Constants.CALLBACKS, Sonar.Constants.EVENTS
-local state, expanded, refreshing = nil, Config.FieldHud.DefaultExpanded == true, false
+local state, expanded, hidden, refreshing = nil, Config.FieldHud.DefaultExpanded == true, false, false
+local currentReservationId = nil
 local syncedServerTime, syncedAt, lastSuccessAt = 0, 0, 0
 
 local function now()
@@ -42,7 +43,7 @@ local function nextAction(prioritySlot)
 end
 
 local function pushUpdate(messageType, syncState, stale)
-    if not state then return end
+    if not state or hidden then return end
     local age = (GetGameTimer() - lastSuccessAt) / 1000
     local markers = markerSnapshot()
     ui(messageType or 'fieldHud:update', {
@@ -61,30 +62,62 @@ local function refresh()
     local response = lib.callback.await(CALLBACKS.FIELD_HUD_STATE, false)
     refreshing = false
     if not response or not response.ok then
-        if state then pushUpdate('fieldHud:update', 'unavailable', true) end
+        if state and not hidden then pushUpdate('fieldHud:update', 'unavailable', true) end
         return
     end
     syncedServerTime, syncedAt, lastSuccessAt = tonumber(response.serverTime) or 0, GetGameTimer(), GetGameTimer()
     if not response.data then
         state = nil
+        currentReservationId = nil
         if FieldMarkers and FieldMarkers.Clear then FieldMarkers.Clear() end
         ui('fieldHud:hide')
         return
     end
+
+    local newResId = response.data.reservation and response.data.reservation.id
+    if newResId and newResId ~= currentReservationId then
+        currentReservationId = newResId
+        hidden = false
+    end
+
     state = response.data
     if FieldMarkers and FieldMarkers.SetState then FieldMarkers.SetState(state) end
-    pushUpdate(wasVisible and 'fieldHud:update' or 'fieldHud:show', 'ready', false)
+    if hidden then
+        ui('fieldHud:hide')
+    else
+        pushUpdate(wasVisible and 'fieldHud:update' or 'fieldHud:show', 'ready', false)
+    end
 end
 
 function FieldHud.Refresh() CreateThread(refresh) end
 
+local function toggleHide()
+    if not state then return end
+    hidden = not hidden
+    if hidden then
+        ui('fieldHud:hide')
+    else
+        pushUpdate('fieldHud:show', 'ready', false)
+    end
+end
+
 RegisterCommand(Config.FieldHud.ToggleCommand, function()
     if not state then return end
+    if hidden then
+        hidden = false
+        pushUpdate('fieldHud:show', 'ready', false)
+        return
+    end
     expanded = not expanded
     ui('fieldHud:mode', { expanded = expanded })
     pushUpdate()
 end, false)
-RegisterKeyMapping(Config.FieldHud.ToggleCommand, 'Expand Field Operations HUD', 'keyboard', Config.FieldHud.ToggleKey)
+RegisterKeyMapping(Config.FieldHud.ToggleCommand, 'Expand Field Operations HUD', 'keyboard', Config.FieldHud.ToggleKey or 'C')
+
+RegisterCommand(Config.FieldHud.HideCommand or 'sfpj_field_hud_hide', function()
+    toggleHide()
+end, false)
+RegisterKeyMapping(Config.FieldHud.HideCommand or 'sfpj_field_hud_hide', 'Hide/Show Field Operations HUD', 'keyboard', Config.FieldHud.HideKey or 'Z')
 
 RegisterNetEvent(EVENTS.FIELD_HUD_INVALIDATE, function()
     FieldHud.Refresh()

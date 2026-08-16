@@ -109,7 +109,7 @@ export function App({ initial }: { initial?: FieldHudView }) {
         <section className="field-tip"><Leaf size={17} weight="fill"/><div><small>Field guide</small><p>{tip(view)}</p></div></section>
         <section className="legend" aria-label="Field marker legend"><span data-tone="empty">Empty</span><span data-tone="healthy">Stable</span><span data-tone="care">Care</span><span data-tone="critical">Urgent</span><span data-tone="ready">Ready</span><span data-tone="blocked">Blocked</span></section>
       </div> : null}
-      <footer><span>{view.state.field.region ?? view.state.field.location}</span><kbd>C</kbd><strong>{view.expanded ? "Compact" : "Expand"}</strong></footer>
+      <footer><span>{view.state.field.region ?? view.state.field.location}</span><kbd>C</kbd><strong>{view.expanded ? "Compact" : "Expand"}</strong><kbd>Z</kbd><strong>Hide</strong></footer>
     </article>
   </main>;
 }
