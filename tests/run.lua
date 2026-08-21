@@ -288,6 +288,22 @@ test('gameplay action mutex spans animation and authoritative callback', functio
     assert(source:find('function Actions.IsBusy()', 1, true), 'shared action busy state is required')
 end)
 
+test('harvest result keeps quality details out of the player notification', function()
+    local file = assert(io.open('client/modules/interaction/actions.lua', 'rb'))
+    local source = file:read('*a'); file:close()
+    local harvestStart = assert(source:find('function Actions.Harvest', 1, true),
+        'harvest action must exist')
+    local harvestEnd = assert(source:find('-- Entry points', harvestStart, true),
+        'harvest action boundary must exist')
+    local harvestSource = source:sub(harvestStart, harvestEnd - 1)
+    assert(harvestSource:find("Bridge.Notify(('Harvested %d x %s.')", 1, true),
+        'harvest result must retain quantity and crop')
+    for _, hidden in ipairs({ 'data.quality', 'data.tierLabel', 'data.productionScore', 'data.defect' }) do
+        assert(not harvestSource:find(hidden, 1, true),
+            'harvest result must not expose ' .. hidden)
+    end
+end)
+
 test('invalid operational config is rejected', function()
     local ace = Config.Admin.Ace
     local buckets = Config.Security.AllowedRoutingBuckets

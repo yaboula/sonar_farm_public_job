@@ -435,11 +435,8 @@ function Actions.Harvest(cropId)
     end
 
     local data = response.data
-    local detail = Config.Features.AdvancedCare
-        and (', production %s, defect %s'):format(data.productionScore, data.defect)
-        or ''
-    Bridge.Notify(('Harvested %d x %s (%s, quality %s%s).')
-        :format(data.units, data.cropType, data.tierLabel, data.quality, detail), NOTIFY.SUCCESS)
+    Bridge.Notify(('Harvested %d x %s.')
+        :format(data.units, data.cropType), NOTIFY.SUCCESS)
 
     Slots.RefreshProps()
 end

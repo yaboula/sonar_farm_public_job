@@ -42,6 +42,15 @@ describe("Crop Inspection Pulse Rail", () => {
     expect(document.querySelectorAll('svg[data-tone="good"]')).toHaveLength(2);
   });
 
+  it("keeps quality internal while showing the estimated yield outcome", () => {
+    render(<App />);
+    open();
+    expect(screen.queryByText("EST. QUALITY")).not.toBeInTheDocument();
+    expect(screen.queryByText("FINE")).not.toBeInTheDocument();
+    expect(screen.getByText("EST. YIELD")).toBeInTheDocument();
+    expect(screen.getByText("85%")).toBeInTheDocument();
+  });
+
   it("merges lightweight updates without losing the last curve series", () => {
     render(<App />);
     open();

@@ -1,4 +1,4 @@
-import { Bug, ChartBar, Clock, Drop, Leaf, Plant, ShieldCheck, Star } from "@phosphor-icons/react";
+import { Bug, ChartBar, Clock, Drop, Leaf, Plant, ShieldCheck } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
 import { cropImages } from "./cropImages";
 import { curveTone, MetricChart } from "./MetricChart";
@@ -14,14 +14,6 @@ const FIELD_GUIDES = [
   { key: "protection", headline: "PROTECTION ENDS WITH ITS TIMER", detail: "Residual care only works while the metric timer is active." },
   { key: "history", headline: "CURVES SHOW RECORDED CROP HISTORY", detail: "Each line ends at NOW and contains no invented future projection." },
 ] as const;
-
-// Quality tier → CSS variable name for colour
-const TIER_TONE: Record<string, string> = {
-  poor: "var(--c-risk)",
-  standard: "var(--c-watch)",
-  fine: "var(--c-good)",
-  premium: "#9de8b0",
-};
 
 function orderedGuides(cause: string) {
   const normalized = cause.toLowerCase();
@@ -124,12 +116,6 @@ export function App() {
         <span className="footer-time footer-time--care"><Clock size={15} /><small>LAST CARE</small><strong>{duration(historySeconds)} AGO</strong></span>
         {payload.outcome && (
           <div className="footer-outcomes">
-            <span className="footer-time footer-outcome" style={{ color: TIER_TONE[payload.outcome.qualityTier] ?? "var(--c-watch)" }}>
-              <Star size={13} weight="fill" />
-              <small>EST. QUALITY</small>
-              <strong>{Math.round(payload.outcome.quality)}%</strong>
-              <em>{payload.outcome.qualityLabel.toUpperCase()}</em>
-            </span>
             <span className="footer-time footer-outcome" style={{ color: payload.outcome.production >= 80 ? "var(--c-good)" : payload.outcome.production >= 50 ? "var(--c-watch)" : "var(--c-risk)" }}>
               <ChartBar size={13} weight="fill" />
               <small>EST. YIELD</small>
