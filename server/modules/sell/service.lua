@@ -11,7 +11,7 @@ local function eligible(source, identifier)
     for itemId, cropType in pairs(productToCrop) do
         for _, slot in pairs(Bridge.Inventory.GetSlotsWithItem(source, itemId) or {}) do
             local metadata = slot.metadata or {}
-            local tier = tostring(metadata.tier or ''):lower()
+            local tier = tostring(metadata._tier or metadata.tier or 'standard'):lower()
             if metadata.resource == Sonar.Constants.RESOURCE and metadata.producer == identifier
                 and Config.Sell.TierMultipliers[tier] then
                 local key = cropType .. ':' .. tier

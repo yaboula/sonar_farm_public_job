@@ -167,15 +167,15 @@ end
 function Quality.Metadata(record, quality, productionScore, defect)
     local tier = Utils.QualityTier(quality)
     local metadata = {
-        quality = quality,
-        tier = tier.key,
-        label = tier.label,
+        _quality = quality,
+        _tier = tier.key,
+        _label = tier.label,
         crop = record.crop_type,
         harvestedAt = os.time(),
     }
     if Sonar.Conditions.IsAdvancedCareEnabled() then
-        metadata.productionScore = productionScore
-        metadata.defect = defect or 'none'
+        metadata._productionScore = productionScore
+        metadata._defect = defect or 'none'
     end
     return metadata
 end
